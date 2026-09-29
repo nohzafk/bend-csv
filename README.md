@@ -189,7 +189,7 @@ newline with empty fields; an empty quoted field), repeated to the target size,
 CRLF line ends, never a CRLF inside a quoted field -- on a 14-core Apple machine
 with 36 GB of memory. The two scripts are `native/scale.ts` and `bench_js.ts`.
 
-Both tables are single runs of those scripts, minutes apart at best: peak memory
+Both tables come from one run of one script, minutes apart at best: peak memory
 repeats closely, timing does not -- the same 10 MB parse has come out anywhere
 between 1.1 s and 1.8 s. Treat the time columns as a factor, not a figure.
 
@@ -245,20 +245,24 @@ set (`bun bench_js.ts`):
 
 | input | this parser | Deno's `@std/csv` |
 | --- | --- | --- |
-| 1 KB | 2 ms, 19 MB | 1 ms, 15 MB |
-| 4 KB | 3 ms, 25 MB | 1 ms, 17 MB |
-| 16 KB | 6 ms, 34 MB | 2 ms, 20 MB |
-| 64 KB | 14 ms, 51 MB | 3 ms, 24 MB |
-| 256 KB | 45 ms, 135 MB | 9 ms, 34 MB |
-| 1 MB | 136 ms, 416 MB | 35 ms, 51 MB |
-| 10 MB | 1.8 s, 4032 MB | 294 ms, 285 MB |
+| 1 KB | 2 ms, 20 MB | 1 ms, 15 MB |
+| 4 KB | 3 ms, 24 MB | 1 ms, 17 MB |
+| 16 KB | 5 ms, 32 MB | 2 ms, 20 MB |
+| 64 KB | 13 ms, 48 MB | 3 ms, 24 MB |
+| 256 KB | 36 ms, 120 MB | 9 ms, 34 MB |
+| 1 MB | 125 ms, 368 MB | 35 ms, 50 MB |
+| 10 MB | 1.1 s, 2894 MB | 290 ms, 288 MB |
 
 Both read every size, and the rows agree at every one of them. The peak includes
 the runtime's own footprint (about 35 MB), so the small sizes say nothing about
-memory. What the larger ones say is that this lane is a few times slower than
-Deno's and much heavier -- about 400 MB of heap per MB of input against 27 (the
+memory. What the larger ones say is that this lane is about four times slower than
+Deno's and much heavier -- about 290 MB of heap per MB of input against 29 (the
 native lane costs 74) -- because the parser conses a token per character and
-reads the input three times. What that buys is the proofs: Deno's parser has
+reads the input three times. Peak memory fell by about a quarter on these inputs
+when the emitter stopped allocating a fresh object for a constructor with no
+fields (bend-emit `cd49ac3`, the commit `vendor/` is pinned to); that is the whole
+of what an emitter can reach here, the token per character being the program's
+own data. What that buys is the proofs: Deno's parser has
 none, and a host needs no build step of its own, Bend's ES module being the whole
 parser.
 
