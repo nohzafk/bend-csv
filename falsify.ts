@@ -36,8 +36,9 @@ let CP = 44;
 const parse = (s: string) => myCanon(s);
 const myCanon = (s: string) => canon(myRows(mine.parse_sep(CP, s)));
 const myDecode = (s: string) => {
-  const m = mine.decode(mine.tokens(CP, s));
-  return m.$ === "Some" ? JSON.stringify(m.value) : "none";
+  const r = mine.parse_sep(CP, s);
+  const rows = myRows(r);
+  return rows && rows.length === 1 && rows[0].length === 1 ? JSON.stringify(rows[0][0]) : "none";
 };
 
 const quoted = (s: string) => s.includes('"');

@@ -3,7 +3,7 @@ import ./core.bend as A
 
 # csv-abnf's laws.
 #
-# Nine laws about core.bend. Agreement with another CSV parser is not a law
+# Nine laws about core.bend (the fused walk `go`). Agreement with another CSV parser is not a law
 # here: it is checked by oracle.ts, which is a test, and an oracle can find a bug
 # but proves nothing.
 #
@@ -93,7 +93,7 @@ law abnf_quoted_field_is_its_content:
 law abnf_doubled_quote_is_one_quote:
   for +sep: U32
   for +hq: {U32.is_eq(sep, 34) == False{} : Bool}
-  {A.decode(A.tokens(sep, "\"a\"\"b\"")) == Some{"a\"b"} : Maybe<&2, String>}
+  {A.parse_sep(sep, "\"a\"\"b\"") == A.Parsed{Con{Con{"a\"b", Nil{}}, Nil{}}} : A.Ans}
 
 # field = (escaped / non-escaped): a quoted empty field is a field, so the row
 # survives.
