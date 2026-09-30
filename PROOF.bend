@@ -16,6 +16,9 @@ import ./vendor/bendlib/packages/bend-mathlib/list.bend as ML
 
 # ---- abnf_empty_input_is_no_record ----
 
+def Laws.abnf_empty_input_is_no_record(sep):
+  {==}
+
 # ---- abnf_lone_empty_field_keeps_its_row ----
 
 # ---- abnf_cr_inside_a_field_is_content ----
