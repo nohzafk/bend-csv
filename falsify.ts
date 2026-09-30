@@ -1,4 +1,4 @@
-// Falsify csv-abnf's laws, before any of them is approved.
+// Falsify bend-csv's laws, before any of them is approved.
 //
 //   bun falsify.ts            every law, with a minimal counterexample each
 //   bun falsify.ts -v         also show each law's instance count
@@ -25,7 +25,7 @@ function fromL(l: any): any[] {
   return o;
 }
 
-// csv-abnf answers Parsed{rows} or Rejected{}; a refusal's kind and position are
+// bend-csv answers Parsed{rows} or Rejected{}; a refusal's kind and position are
 // not part of any claim here, so both collapse to rows or "refused".
 const myRows = (r: any): string[][] | null =>
   r.$ === "Parsed" ? fromL(r.rows).map((f: any) => fromL(f)) : null;
@@ -41,6 +41,8 @@ const myDecode = (s: string) => {
   return rows && rows.length === 1 && rows[0].length === 1 ? JSON.stringify(rows[0][0]) : "none";
 };
 
+const cat = (x: string[][] | null, mid: string[][], y: string[][] | null) =>
+  canon(x === null || y === null ? null : [...x, ...mid, ...y]);
 const quoted = (s: string) => s.includes('"');
 const cleanRecord = (s: string) => !s.includes(SEP) && !/["\n\r]/.test(s);
 
@@ -66,16 +68,38 @@ const LAWS: Law[] = [
     gen: "single",
   },
   {
-    name: "abnf_trailing_newline_adds_nothing",
-    plain: "A newline at the very end of the input changes nothing: the record it closes is the one the end of the input would close anyway.",
-    holds: ([s]) => myCanon(s + "\n") === myCanon(s),
+    name: "abnf_ending_an_unfinished_record_adds_no_row",
+    plain: "If the input's last character is not a newline, adding a newline changes nothing: it only closes the record the end of the input would have closed anyway (no phantom row). When the input already ends in a newline, or is empty, it adds a blank row instead, so this is not claimed there.",
+    holds: ([s, c]) => c.length !== 1 || c === "\n" || myCanon(s + c + "\n") === myCanon(s + c),
+    gen: "pair",
+  },
+  {
+    name: "abnf_blank_line_is_a_record",
+    sepOk: (sep) => sep !== '"',
+    plain: "With no quote in what comes before it, an empty line is exactly the record of one quoted empty field: writing the line as an empty line or as \"\" gives the same answer, so blank lines are kept, in place.",
+    holds: ([a, b]) => quoted(a) || myCanon(a + "\n\n" + b) === myCanon(a + "\n\"\"\n" + b),
+    gen: "pair",
+  },
+  {
+    name: "abnf_crlf_blank_line_is_a_record",
+    sepOk: (sep) => sep !== '"',
+    plain: "An empty CRLF line, after any prefix with no quote, is a record of one empty field, the same as the \"\" line.",
+    holds: ([a, b]) => quoted(a) || myCanon(a + "\n\r\n" + b) === myCanon(a + "\n\"\"\n" + b),
+    gen: "pair",
+  },
+  {
+    name: "abnf_leading_blank_line_is_a_record",
+    sepOk: (sep) => sep !== '"',
+    plain: "An empty first line (LF) is a record of one empty field, the same as a first line \"\".",
+    holds: ([b]) => myCanon("\n" + b) === myCanon("\"\"\n" + b),
     gen: "single",
   },
   {
-    name: "abnf_blank_line_adds_nothing",
-    plain: "With no quote in the input, an empty line produces no record, so inserting one changes nothing at all.",
-    holds: ([a, b]) => quoted(a + b) || myCanon(a + "\n\n" + b) === myCanon(a + "\n" + b),
-    gen: "pair",
+    name: "abnf_leading_crlf_blank_line_is_a_record",
+    sepOk: (sep) => sep !== '"',
+    plain: "An empty first CRLF line is a record of one empty field, the same as a first line \"\".",
+    holds: ([b]) => myCanon("\r\n" + b) === myCanon("\"\"\n" + b),
+    gen: "single",
   },
   {
     name: "abnf_clean_input_is_one_field",

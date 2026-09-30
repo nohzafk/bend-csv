@@ -1,5 +1,8 @@
 import Base
 
+# Records: every LF (or CRLF) ends a record, so a blank line is a record of one
+# empty field. The end of input ends a record only if one is unfinished, so
+# the empty input holds no record and a final terminator adds no extra row.
 # The parser: one walk over the string, finished fields and records built
 # directly, no token list, no state record.
 # Mode and accumulators are separate arguments of `go`. The character class is
@@ -73,7 +76,7 @@ def fin(+m: FM, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, 
     case MS{}:
       Parsed{List.reverse(&2, List<&2, String>, close_empty(flds, rows))}
     case MSC{}:
-      Parsed{List.reverse(&2, List<&2, String>, close_empty(flds, rows))}
+      Parsed{List.reverse(&2, List<&2, String>, row(SNil{}, flds, rows))}
     case MB{}:
       Parsed{List.reverse(&2, List<&2, String>, row(txt, flds, rows))}
     case MBC{}:
@@ -103,7 +106,7 @@ def go(+s: String, +m: FM, +k: CK, +sep: U32, +txt: String, +flds: List<&2, Stri
     case SNil{} _ _:
       fin(m, txt, flds, rows)
     case SCon{c, t} MS{} CLf{}:
-      go(t, MS{}, cls_of(sep, t), sep, SNil{}, Nil{}, close_empty(flds, rows))
+      go(t, MS{}, cls_of(sep, t), sep, SNil{}, Nil{}, row(SNil{}, flds, rows))
     case SCon{c, t} MS{} CCr{}:
       go(t, MSC{}, cls_of(sep, t), sep, SNil{}, flds, rows)
     case SCon{c, t} MS{} CSep{}:
@@ -141,7 +144,7 @@ def go(+s: String, +m: FM, +k: CK, +sep: U32, +txt: String, +flds: List<&2, Stri
     case SCon{_, _} MQ{} CText{}:
       Rejected{}
     case SCon{c, t} MSC{} CLf{}:
-      go(t, MS{}, cls_of(sep, t), sep, SNil{}, Nil{}, close_empty(flds, rows))
+      go(t, MS{}, cls_of(sep, t), sep, SNil{}, Nil{}, row(SNil{}, flds, rows))
     case SCon{c, t} MSC{} CCr{}:
       go(t, MBC{}, cls_of(sep, t), sep, one(Chr{13}), flds, rows)
     case SCon{c, t} MSC{} CSep{}:

@@ -1,7 +1,7 @@
 import Base
 import ../core.bend as A
 
-# The native build of csv-abnf, as a host runs it: `bench <file>` parses the
+# The native build of bend-csv, as a host runs it: `bench <file>` parses the
 # file with `A.parse` (the comma) and prints what it got -- records, fields and
 # field characters, or that it is not a file -- and the milliseconds the parse
 # took. native/scale.ts builds it and measures it on a generated corpus.

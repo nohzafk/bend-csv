@@ -50,7 +50,7 @@ for (let i = 0; len < kb * 1024; i++) {
   rows.push(r);
   len += r.length;
 }
-const file = `/tmp/csv-abnf-bench-${mb}mb.csv`;
+const file = `/tmp/bend-csv-bench-${mb}mb.csv`;
 await Bun.write(file, rows.join(""));
 
 async function once(cmd: string[]): Promise<{ out: string; peak: number }> {

@@ -1,4 +1,4 @@
-// csv-abnf for a TypeScript host: the parser behind one function.
+// bend-csv for a TypeScript host: the parser behind one function.
 //
 //   import { parse, CsvParseError } from "./bridge.ts";
 //

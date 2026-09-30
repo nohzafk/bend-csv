@@ -1,6 +1,3 @@
 [submodule "vendor/bendlib"]
 	path = vendor/bendlib
 	url = https://github.com/nohzafk/bendlib
-[submodule "vendor/bend-emit"]
-	path = vendor/bend-emit
-	url = https://github.com/nohzafk/bend-emit

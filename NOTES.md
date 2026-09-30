@@ -1,4 +1,4 @@
-# Notes: how csv-abnf is built and checked
+# Notes: how bend-csv is built and checked
 
 This file holds the internal material that the README leaves out. Nothing here
 is needed to use the parser. It is moved from the earlier README, with two
@@ -10,17 +10,21 @@ The gate has eight steps. Each can fail.
 
 1. The core checks (`bend --check-only core.bend` prints `ALL PROOFS CHECK`), and no
    proof of it rests on unsafe code.
-2. The core builds into a typed module in `dist/` (with `vendor/bend-emit`).
-   `bend-emit` exits 0 even when Bend cannot compile the file, so the gate reads
-   its log and not its exit code. Otherwise the oracle would measure a stale
-   module.
+2. The core builds into a typed module in `dist/` with `scripts/build.sh`,
+   which runs the local `bend-emit@0.3.0` dev dependency (not a submodule).
+   `bend-emit` exits 0 even when Bend cannot compile the file, so the
+   script reads its log as well as the exit code, and deletes the old module
+   first. Otherwise the oracle would measure a stale module. `dist/` is
+   committed; CI rebuilds and fails if it differs.
 3. A host reaches the parser through `bridge.ts` (`check_bridge.ts`), including
    the refusals the bridge owes a host: a separator the parser would read as
    itself.
 4. The parser agrees with the reference (`oracle.ts`, Deno's `@std/csv` in
-   `reference/std`) on every small input, about 190k in all (192,447). The one
-   known difference class, a CRLF inside a quoted field, is reported and not
-   hidden: 452 inputs.
+   `reference/std`) on every small input, about 190k in all (192,447). Two
+   known difference classes are reported and not hidden: blank records (11,910
+   inputs; accepted only when the rows equal the reference's with `[""]` inserted
+   at exactly the blank lines an independent scan finds), a CRLF inside a quoted
+   field (332), and both at once (120). 180,085 agree exactly.
 5. Every law is falsified over about 100k inputs (`falsify.ts`, with
    `bend-falsify`). The falsifier itself is controlled: see "Harness traps".
 6. Every law is proved (`bend --check-only PROOF.bend`).
@@ -35,10 +39,11 @@ The gate has eight steps. Each can fail.
 
 ### The `--verdict` caveat
 
-`bend --verdict` rechecks a proof with the BendTT kernel. The gate does not run
-it. From Bend 2.0.34 the checker shares a graph that it has proved equal, and the
-kernel has not caught up. The two can disagree on a proof that the checker
-accepts. This is the toolchain's state, not this library's.
+`bend --verdict PROOF.bend` rechecks the proofs with the BendTT kernel.
+The current twelve proofs pass this check on Bend 2.0.34. The automated gate
+runs `--check-only`; the kernel recheck was run separately. Older proofs in
+this toolchain had checker/kernel disagreements; that is not the result for
+the current proof file.
 
 ## Harness traps
 
@@ -90,13 +95,16 @@ TEXTDATA    = %x20-21 / %x23-2B / %x2D-7E
 Three refinements, each measured against the reference and each what a first
 guess gets wrong:
 
-- **a blank line is not a record.** `record` as written can be an empty field, so
-  the grammar over-generates here; the reading drops it. It falls out of the step:
-  a line end met before any field has begun closes nothing, while `""` has already
-  begun one, so it is a record holding one empty field.
+- **a blank line is a record of one empty field.** `record` as written can be an
+  empty field, and this reading keeps it (decided by the user; the reference
+  drops blank lines). A line end met at a field start closes a record holding one
+  empty field, the same as `""`. The empty input still holds no record.
 - **a CR the line does not end at is content.** CR is not TEXTDATA, but `a\rb` is
   one field. A record ends at LF, at CRLF, or at a CR the input ends on.
-- **a trailing newline adds no record.**
+- **ending an unfinished record adds no row.** `a` and `a\n` are the same; a
+  line end after a line end is a blank row. The old "trailing LF adds nothing"
+  law is false now (empty input, and input already ending in LF) and is replaced
+  by a law conditioned on the last character not being LF.
 
 
 ## The shape, and why it is this shape
@@ -132,20 +140,23 @@ list has to reason about the list it is handed, so it needed mirrored functions
 layer had accumulated in. With one walk there is nothing to mirror: each mode's
 induction hypothesis says what the walk does to the input that is left, and two
 mathlib facts about `String.append` close the steps. `PROOF.bend` went from 951
-lines to 577 while proving the same nine laws.
+lines to 577 while proving nine laws (twelve since the blank-line change).
 
 
 ## The laws
 
-Nine, in `LAWS.bend`. Each is falsified over ~100k inputs across ten separators
+Twelve, in `LAWS.bend`. Each is falsified over ~100k inputs across ten separators
 before it is proved, and each has a mutant that makes it false and breaks its own
 proof.
 
 | law | what it says | hypotheses |
 | --- | --- | --- |
 | `abnf_empty_input_is_no_record` | the empty input holds no record | none |
-| `abnf_trailing_newline_adds_nothing` | a newline at the very end changes nothing | none |
-| `abnf_blank_line_adds_nothing` | an empty line produces no record | no quote in the input |
+| `abnf_ending_an_unfinished_record_adds_no_row` | an LF after an input whose last character is not LF changes nothing | none beyond the last character not being LF |
+| `abnf_blank_line_is_a_record` | `a LF LF b` reads as `a LF "" LF b`: a blank line is a record of one empty field | no quote in `a`, separator is not the quote |
+| `abnf_crlf_blank_line_is_a_record` | the same for a CRLF blank line | same |
+| `abnf_leading_blank_line_is_a_record` | `LF b` reads as `"" LF b` | separator is not the quote |
+| `abnf_leading_crlf_blank_line_is_a_record` | `CRLF b` reads as `"" LF b` | separator is not the quote |
 | `abnf_clean_input_is_one_field` | a clean input is one record of one field, itself; empty means no record | `Clean(sep, s)` |
 | `abnf_separator_makes_two_fields` | two clean records joined by the separator are two fields | `Clean`, separator is not LF or CR |
 | `abnf_quoted_field_is_its_content` | a quoted field's content is that content | no quote in it, separator is not the quote |
@@ -162,7 +173,7 @@ input's own letters. The falsifier's separator set therefore includes letters.
 ## Measurement method
 
 Two lanes: a native binary built by Bend's C backend, and the JavaScript module
-that the emitter in `vendor/bend-emit` builds. Both are measured on the same
+that `scripts/build.sh` builds (emitter `bend-emit@0.3.0`). Both are measured on the same
 corpus, on a 14-core Apple machine with 36 GB of memory. The scripts are
 `native/scale.ts` and `bench_js.ts`.
 
@@ -213,13 +224,13 @@ through `bridge.ts`. Those figures are older than the table in the README (265 m
 ## What a checkout carries
 
 `git clone --recurse-submodules` (or `git submodule update --init` after a plain
-clone) fetches `vendor/`. `bun install` fetches the dev dependency.
+clone) fetches `vendor/bendlib` (the proofs library; the emitter is not vendored). `bun install` fetches the dev dependency.
 
 | | needs |
 | --- | --- |
 | `core.bend` | nothing: it imports `Base` alone |
 | `LAWS.bend`, `PROOF.bend` | `vendor/bendlib/packages/bend-mathlib` (the list and string lemmas), a submodule |
-| `bridge.ts` | the module in `dist/`, which the gate builds with `vendor/bend-emit` (a submodule) |
+| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.3.0`; not a submodule) |
 | `oracle.ts` | `reference/std` (Deno's `@std/csv`, MIT), a plain directory |
 | `falsify.ts`, `check_mutants.ts` | `bend-falsify`, a dev dependency pinned in `package.json` |
 | `native/` | nothing: `bend` builds it |
@@ -233,10 +244,10 @@ commit it was taken at.
 
 ```sh
 bend login                                   # once
-bend core.bend --publish csv-abnf@0.1.0.0
+bend core.bend --publish bend-csv@0.1.0.0
 ```
 
-Correction: the earlier README wrote `csv-abnf@0.1.0`. Bend rejects it: the
+Correction: the earlier README wrote `bend-csv@0.1.0`. Bend rejects it: the
 version needs four numbers. The command uploads the file with everything it
 imports, and it prints the import line. A publish is public and permanent. A
 `LICENSE` file beside the entry decides the license. Without one, a package is
@@ -250,5 +261,5 @@ An unnamed publish gives a content-hash import (`import 0x<hash>/core.bend as C`
 
 ## Sizes
 
-`core.bend` is 174 lines. `LAWS.bend` is 125. `PROOF.bend` is 577, one section
+`core.bend` is 177 lines. `LAWS.bend` is 162. `PROOF.bend` is 728, one section
 per law.

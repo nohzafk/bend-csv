@@ -1,0 +1,58 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: oven-sh/setup-bun@v2
+
+      # Official release archive of bendlang/bend (same source and layout as
+      # vendor/bendlib/tools/install-bend.ts). The sha256 is the digest GitHub
+      # publishes for the v2.0.34 linux-x64 asset; the version is checked after.
+      - name: Install Bend 2.0.34
+        run: |
+          set -eu
+          WANT=$(tr -d ' \r\n' < BEND_VERSION)
+          test "$WANT" = "2.0.34"
+          F=bend-$WANT-linux-x64.tar.gz
+          curl -fsSL -o "$RUNNER_TEMP/$F" "https://github.com/bendlang/bend/releases/download/v$WANT/$F"
+          echo "78106a97af242429dcc057258eb8d10f69cddebcd5e263022185a52d003e09bf  $RUNNER_TEMP/$F" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$F" -C "$RUNNER_TEMP"
+          mkdir -p "$HOME/.bend/bin"
+          cp -R "$RUNNER_TEMP/bend/bend2" "$RUNNER_TEMP/bend/guide" "$HOME/.bend/"
+          cp "$RUNNER_TEMP/bend/bin/bend" "$HOME/.bend/bin/bend"
+          echo "$HOME/.bend/bin" >> "$GITHUB_PATH"
+          test "$("$HOME/.bend/bin/bend" version | head -1)" = "bend $WANT"
+
+      - name: Install build and verification dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Rebuild into a scratch directory
+        run: sh scripts/build.sh core.bend "$RUNNER_TEMP/dist"
+
+      - name: Committed dist/ is current
+        run: |
+          diff -r "$RUNNER_TEMP/dist" dist
+          git ls-files --error-unmatch dist/core.mjs dist/core.d.mts
+
+      - name: Gate
+        run: sh test.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bend-csv-dist
+          path: |
+            dist/core.mjs
+            dist/core.d.mts

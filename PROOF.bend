@@ -4,7 +4,7 @@ import ./core.bend as A
 import ./vendor/bendlib/packages/bend-mathlib/string.bend as MS
 import ./vendor/bendlib/packages/bend-mathlib/list.bend as ML
 
-# csv-abnf's proofs, against the fused core (one walk `go`, no token list).
+# bend-csv's proofs, against the fused core (one walk `go`, no token list).
 # The gate is `bend PROOF.bend`.
 #
 # Each law of LAWS.bend is filled by a `def Laws.<name>` here: the law's `for`
@@ -150,7 +150,7 @@ def rej(+t: String, +sep: U32, txt: String, flds: List<&2, String>, rows: List<&
 def stp(+c: Char, +m: A.FM, +k: A.CK, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>) -> Stt:
   match m k:
     case A.MS{} A.CLf{}:
-      Stt{A.MS{}, SNil{}, Nil{}, A.close_empty(flds, rows)}
+      Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, flds, rows)}
     case A.MS{} A.CCr{}:
       Stt{A.MSC{}, SNil{}, flds, rows}
     case A.MS{} A.CSep{}:
@@ -190,7 +190,7 @@ def stp(+c: Char, +m: A.FM, +k: A.CK, +txt: String, +flds: List<&2, String>, +ro
     case A.MQ{} A.CText{}:
       Stt{A.MBad{}, txt, flds, rows}
     case A.MSC{} A.CLf{}:
-      Stt{A.MS{}, SNil{}, Nil{}, A.close_empty(flds, rows)}
+      Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, flds, rows)}
     case A.MSC{} A.CCr{}:
       Stt{A.MBC{}, SCon{Chr{13}, SNil{}}, flds, rows}
     case A.MSC{} A.CSep{}:
@@ -312,32 +312,6 @@ def go_step(+m: A.FM, +k: A.CK, +c: Char, +t: String, +sep: U32, +txt: String, +
       Equal.sym(A.Ans, A.go(t, A.MBad{}, A.cls_of(sep, t), sep, txt, flds, rows), A.Rejected{}, rej(t, sep, txt, flds, rows))
     case A.MBad{} A.CText{}:
       Equal.sym(A.Ans, A.go(t, A.MBad{}, A.cls_of(sep, t), sep, txt, flds, rows), A.Rejected{}, rej(t, sep, txt, flds, rows))
-
-def tn_base(+m: A.FM, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, +sep: U32) -> {gost(SCon{Chr{10}, SNil{}}, Stt{m, txt, flds, rows}, sep) == gost(SNil{}, Stt{m, txt, flds, rows}, sep) : A.Ans}:
-  match m:
-    case A.MS{}:
-      {==}
-    case A.MB{}:
-      {==}
-    case A.ME{}:
-      {==}
-    case A.MQ{}:
-      {==}
-    case A.MSC{}:
-      {==}
-    case A.MBC{}:
-      {==}
-    case A.MQC{}:
-      {==}
-    case A.MBad{}:
-      {==}
-
-def tn(+sep: U32, +s: String, +st: Stt) -> {gost(String.append(s, SCon{Chr{10}, SNil{}}), st, sep) == gost(s, st, sep) : A.Ans}:
-  match s st:
-    case SNil{} Stt{m, txt, flds, rows}:
-      tn_base(m, txt, flds, rows, sep)
-    case SCon{c, t} Stt{m, txt, flds, rows}:
-      Equal.trans(A.Ans, gost(String.append(SCon{c, t}, SCon{Chr{10}, SNil{}}), Stt{m, txt, flds, rows}, sep), gost(String.append(t, SCon{Chr{10}, SNil{}}), stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), gost(SCon{c, t}, Stt{m, txt, flds, rows}, sep), go_step(m, A.cls_of(sep, SCon{c, t}), c, String.append(t, SCon{Chr{10}, SNil{}}), sep, txt, flds, rows), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SNil{}}), stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), gost(t, stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), gost(SCon{c, t}, Stt{m, txt, flds, rows}, sep), tn(sep, t, stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows)), Equal.sym(A.Ans, gost(SCon{c, t}, Stt{m, txt, flds, rows}, sep), gost(t, stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), go_step(m, A.cls_of(sep, SCon{c, t}), c, t, sep, txt, flds, rows))))
 
 #
 # NotE(m): the walk is not inside an escaped field. NotQ(k): the class is not a quote.
@@ -475,55 +449,232 @@ def go_stepS(+c: Char, +t: String, +st: Stt, +sep: U32) -> {gost(SCon{c, t}, st,
     case Stt{+m, +txt, +flds, +rows}:
       go_step(m, A.cls_of(sep, SCon{c, t}), c, t, sep, txt, flds, rows)
 
-def bl_base2(+m: A.FM, +sep: U32, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, hm: NotE(m), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{10}, b}}, Stt{m, txt, flds, rows}, sep) == gost(SCon{Chr{10}, b}, Stt{m, txt, flds, rows}, sep) : A.Ans}:
+# tools: ending an unfinished record, and blank lines
+
+def NotLf(+k: A.CK) -> Type:
+  match k:
+    case A.CLf{}:
+      Empty
+    case _:
+      Unit
+
+def cls_go_nl(+cr: Bool, +sb: Bool, +qt: Bool) -> NotLf(A.cls_go(False{}, cr, sb, qt)):
+  match cr sb qt:
+    case True{} _ _:
+      Unit{}
+    case False{} True{} _:
+      Unit{}
+    case False{} False{} True{}:
+      Unit{}
+    case False{} False{} False{}:
+      Unit{}
+
+def cls_notlf(+sep: U32, +x: U32, t: String, hx: {Cmp.is_eq(U32.cmp(x, 10)) == False{} : Bool}) -> NotLf(A.cls_of(sep, SCon{Chr{x}, t})):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 10)), False{}, hx) : NotLf(A.cls_go(_, Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), Cmp.is_eq(U32.cmp(x, 34))))
+  cls_go_nl(Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), Cmp.is_eq(U32.cmp(x, 34)))
+
+# After any step on a character that is not LF, an LF and the end of input agree:
+# the state is never a fresh record start with nothing in it.
+def en_base(+c: Char, +m: A.FM, +k: A.CK, nl: NotLf(k), +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, +sep: U32) -> {gost(SCon{Chr{10}, SNil{}}, stp(c, m, k, txt, flds, rows), sep) == gost(SNil{}, stp(c, m, k, txt, flds, rows), sep) : A.Ans}:
+  match m k:
+    case A.MS{} A.CLf{}:
+      match nl:
+    case A.MS{} A.CCr{}:
+      {==}
+    case A.MS{} A.CSep{}:
+      {==}
+    case A.MS{} A.CQuote{}:
+      {==}
+    case A.MS{} A.CText{}:
+      {==}
+    case A.MB{} A.CLf{}:
+      match nl:
+    case A.MB{} A.CCr{}:
+      {==}
+    case A.MB{} A.CSep{}:
+      {==}
+    case A.MB{} A.CQuote{}:
+      {==}
+    case A.MB{} A.CText{}:
+      {==}
+    case A.ME{} A.CLf{}:
+      match nl:
+    case A.ME{} A.CCr{}:
+      {==}
+    case A.ME{} A.CSep{}:
+      {==}
+    case A.ME{} A.CQuote{}:
+      {==}
+    case A.ME{} A.CText{}:
+      {==}
+    case A.MQ{} A.CLf{}:
+      match nl:
+    case A.MQ{} A.CCr{}:
+      {==}
+    case A.MQ{} A.CSep{}:
+      {==}
+    case A.MQ{} A.CQuote{}:
+      {==}
+    case A.MQ{} A.CText{}:
+      {==}
+    case A.MSC{} A.CLf{}:
+      match nl:
+    case A.MSC{} A.CCr{}:
+      {==}
+    case A.MSC{} A.CSep{}:
+      {==}
+    case A.MSC{} A.CQuote{}:
+      {==}
+    case A.MSC{} A.CText{}:
+      {==}
+    case A.MBC{} A.CLf{}:
+      match nl:
+    case A.MBC{} A.CCr{}:
+      {==}
+    case A.MBC{} A.CSep{}:
+      {==}
+    case A.MBC{} A.CQuote{}:
+      {==}
+    case A.MBC{} A.CText{}:
+      {==}
+    case A.MQC{} A.CLf{}:
+      match nl:
+    case A.MQC{} A.CCr{}:
+      {==}
+    case A.MQC{} A.CSep{}:
+      {==}
+    case A.MQC{} A.CQuote{}:
+      {==}
+    case A.MQC{} A.CText{}:
+      {==}
+    case A.MBad{} A.CLf{}:
+      match nl:
+    case A.MBad{} A.CCr{}:
+      {==}
+    case A.MBad{} A.CSep{}:
+      {==}
+    case A.MBad{} A.CQuote{}:
+      {==}
+    case A.MBad{} A.CText{}:
+      {==}
+
+def en_baseS(+c: Char, +st: Stt, +k: A.CK, nl: NotLf(k), +sep: U32) -> {gost(SCon{Chr{10}, SNil{}}, stpS(c, st, k), sep) == gost(SNil{}, stpS(c, st, k), sep) : A.Ans}:
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      en_base(c, m, k, nl, txt, flds, rows, sep)
+
+def en(+sep: U32, +s: String, +x: U32, hx: {Cmp.is_eq(U32.cmp(x, 10)) == False{} : Bool}, +st: Stt) -> {gost(String.append(String.append(s, SCon{Chr{x}, SNil{}}), SCon{Chr{10}, SNil{}}), st, sep) == gost(String.append(s, SCon{Chr{x}, SNil{}}), st, sep) : A.Ans}:
+  match s:
+    case SNil{}:
+      Equal.trans(A.Ans, gost(SCon{Chr{x}, SCon{Chr{10}, SNil{}}}, st, sep), gost(SCon{Chr{10}, SNil{}}, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, SNil{}})), sep), gost(SCon{Chr{x}, SNil{}}, st, sep), go_stepS(Chr{x}, SCon{Chr{10}, SNil{}}, st, sep), Equal.trans(A.Ans, gost(SCon{Chr{10}, SNil{}}, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, SNil{}})), sep), gost(SNil{}, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, SNil{}})), sep), gost(SCon{Chr{x}, SNil{}}, st, sep), en_baseS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, SNil{}}), cls_notlf(sep, x, SNil{}, hx), sep), Equal.sym(A.Ans, gost(SCon{Chr{x}, SNil{}}, st, sep), gost(SNil{}, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, SNil{}})), sep), go_stepS(Chr{x}, SNil{}, st, sep))))
+    case SCon{c, t}:
+      Equal.trans(A.Ans, gost(String.append(String.append(SCon{c, t}, SCon{Chr{x}, SNil{}}), SCon{Chr{10}, SNil{}}), st, sep), gost(String.append(String.append(t, SCon{Chr{x}, SNil{}}), SCon{Chr{10}, SNil{}}), stpS(c, st, A.cls_of(sep, SCon{c, t})), sep), gost(String.append(SCon{c, t}, SCon{Chr{x}, SNil{}}), st, sep), go_stepS(c, String.append(String.append(t, SCon{Chr{x}, SNil{}}), SCon{Chr{10}, SNil{}}), st, sep), Equal.trans(A.Ans, gost(String.append(String.append(t, SCon{Chr{x}, SNil{}}), SCon{Chr{10}, SNil{}}), stpS(c, st, A.cls_of(sep, SCon{c, t})), sep), gost(String.append(t, SCon{Chr{x}, SNil{}}), stpS(c, st, A.cls_of(sep, SCon{c, t})), sep), gost(String.append(SCon{c, t}, SCon{Chr{x}, SNil{}}), st, sep), en(sep, t, x, hx, stpS(c, st, A.cls_of(sep, SCon{c, t}))), Equal.sym(A.Ans, gost(String.append(SCon{c, t}, SCon{Chr{x}, SNil{}}), st, sep), gost(String.append(t, SCon{Chr{x}, SNil{}}), stpS(c, st, A.cls_of(sep, SCon{c, t})), sep), go_stepS(c, String.append(t, SCon{Chr{x}, SNil{}}), st, sep))))
+
+def cls_q(+sep: U32, t: String, hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}) -> {A.cls_of(sep, SCon{Chr{34}, t}) == A.CQuote{} : A.CK}:
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.cls_go(False{}, False{}, _, True{}) == A.CQuote{} : A.CK}
+  {==}
+
+# a blank line spelled "" (LF, quote, quote, LF) is one row holding one empty field
+def fin_blk(+sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +b: String, +rows: List<&2, List<&2, String>>) -> {gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, rows}, sep) == gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, rows)}, sep) : A.Ans}:
+  %Equal.sym(A.CK, A.cls_of(sep, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}), A.CQuote{}, cls_q(sep, SCon{Chr{34}, SCon{Chr{10}, b}}, hq)) : {A.go(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, A.MS{}, _, sep, SNil{}, Nil{}, rows) == gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, rows)}, sep) : A.Ans}
+  %Equal.sym(A.CK, A.cls_of(sep, SCon{Chr{34}, SCon{Chr{10}, b}}), A.CQuote{}, cls_q(sep, SCon{Chr{10}, b}, hq)) : {A.go(SCon{Chr{34}, SCon{Chr{10}, b}}, A.ME{}, _, sep, SNil{}, Nil{}, rows) == gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, rows)}, sep) : A.Ans}
+  {==}
+
+def bqL_m(+m: A.FM, +sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, hm: NotE(m), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{10}, b}}, Stt{m, txt, flds, rows}, sep) == gost(SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}, Stt{m, txt, flds, rows}, sep) : A.Ans}:
   match m:
     case A.MS{}:
-      {==}
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(SNil{}, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(SNil{}, flds, rows)))
     case A.MB{}:
-      {==}
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
     case A.ME{}:
       match hm:
     case A.MQ{}:
-      {==}
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
     case A.MSC{}:
-      {==}
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(SNil{}, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(SNil{}, flds, rows)))
     case A.MBC{}:
-      {==}
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
     case A.MQC{}:
-      {==}
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
     case A.MBad{}:
       {==}
 
-def bl_base(+st: Stt, +sep: U32, hm: NotE(modeof(st)), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{10}, b}}, st, sep) == gost(SCon{Chr{10}, b}, st, sep) : A.Ans}:
+def bqL_S(+st: Stt, +sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, hm: NotE(modeof(st)), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{10}, b}}, st, sep) == gost(SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}, st, sep) : A.Ans}:
   match st:
     case Stt{+m, +txt, +flds, +rows}:
-      bl_base2(m, sep, txt, flds, rows, hm, b)
+      bqL_m(m, sep, hq, txt, flds, rows, hm, b)
 
-def bl(+sep: U32, +a: String, ha: Laws.NoQuote(a), +st: Stt, hst: NotE(modeof(st)), +b: String) -> {gost(String.append(a, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep) == gost(String.append(a, SCon{Chr{10}, b}), st, sep) : A.Ans}:
+def bqL(+sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +a: String, ha: Laws.NoQuote(a), +st: Stt, hst: NotE(modeof(st)), +b: String) -> {gost(String.append(a, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep) == gost(String.append(a, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep) : A.Ans}:
   match a:
     case SNil{}:
-      bl_base(st, sep, hst, b)
+      bqL_S(st, sep, hq, hst, b)
     case SCon{Chr{+x}, t}:
       (hqu, ht) = ha
-      Equal.trans(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(t, SCon{Chr{10}, b}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), bl(sep, t, ht, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), stpS_note(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t}), hst, cls_notq(sep, x, t, hqu)), b), Equal.sym(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), gost(String.append(t, SCon{Chr{10}, b}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, b}), st, sep))))
+      Equal.trans(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep), bqL(sep, hq, t, ht, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), stpS_note(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t}), hst, cls_notq(sep, x, t, hqu)), b), Equal.sym(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep))))
+
+def bqC_m(+m: A.FM, +sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, hm: NotE(m), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}, Stt{m, txt, flds, rows}, sep) == gost(SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}, Stt{m, txt, flds, rows}, sep) : A.Ans}:
+  match m:
+    case A.MS{}:
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(SNil{}, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(SNil{}, flds, rows)))
+    case A.MB{}:
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
+    case A.ME{}:
+      match hm:
+    case A.MQ{}:
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
+    case A.MSC{}:
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(SNil{}, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(SNil{}, flds, rows)))
+    case A.MBC{}:
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
+    case A.MQC{}:
+      Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, A.row(txt, flds, rows)}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, A.row(txt, flds, rows))}, sep), fin_blk(sep, hq, b, A.row(txt, flds, rows)))
+    case A.MBad{}:
+      {==}
+
+def bqC_S(+st: Stt, +sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, hm: NotE(modeof(st)), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}, st, sep) == gost(SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}, st, sep) : A.Ans}:
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      bqC_m(m, sep, hq, txt, flds, rows, hm, b)
+
+def bqC(+sep: U32, +hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +a: String, ha: Laws.NoQuote(a), +st: Stt, hst: NotE(modeof(st)), +b: String) -> {gost(String.append(a, SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}), st, sep) == gost(String.append(a, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep) : A.Ans}:
+  match a:
+    case SNil{}:
+      bqC_S(st, sep, hq, hst, b)
+    case SCon{Chr{+x}, t}:
+      (hqu, ht) = ha
+      Equal.trans(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}), st, sep), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SCon{Chr{13}, SCon{Chr{10}, b}}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep), bqC(sep, hq, t, ht, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), stpS_note(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t}), hst, cls_notq(sep, x, t, hqu)), b), Equal.sym(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}}), st, sep))))
+
 
 # ---- abnf_empty_input_is_no_record ----
 
 def Laws.abnf_empty_input_is_no_record(sep):
   {==}
 
-# ---- abnf_trailing_newline_adds_nothing ----
+# ---- abnf_ending_an_unfinished_record_adds_no_row ----
 
-def Laws.abnf_trailing_newline_adds_nothing(sep, s):
-  tn(sep, s, Stt{A.MS{}, SNil{}, Nil{}, Nil{}})
+def Laws.abnf_ending_an_unfinished_record_adds_no_row(sep, s, x, hx):
+  en(sep, s, x, hx, Stt{A.MS{}, SNil{}, Nil{}, Nil{}})
 
-# ---- abnf_blank_line_adds_nothing ----
+# ---- abnf_blank_line_is_a_record ----
 
-def Laws.abnf_blank_line_adds_nothing(sep, a, b, ha, hb):
-  %MS.append_assoc_sym(String.append(a, SCon{Chr{10}, SNil{}}), SCon{Chr{10}, SNil{}}, b) : {A.parse_sep(sep, _) == A.parse_sep(sep, String.append(String.append(a, SCon{Chr{10}, SNil{}}), b)) : A.Ans}
-  %MS.append_assoc_sym(a, SCon{Chr{10}, SNil{}}, b) : {A.parse_sep(sep, String.append(String.append(a, SCon{Chr{10}, SNil{}}), String.append(SCon{Chr{10}, SNil{}}, b))) == A.parse_sep(sep, _) : A.Ans}
-  %MS.append_assoc_sym(a, SCon{Chr{10}, SNil{}}, SCon{Chr{10}, b}) : {A.parse_sep(sep, _) == A.parse_sep(sep, String.append(a, SCon{Chr{10}, b})) : A.Ans}
-  bl(sep, a, ha, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, Unit{}, b)
+def Laws.abnf_blank_line_is_a_record(sep, hq, a, ha, b):
+  bqL(sep, hq, a, ha, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, Unit{}, b)
+
+# ---- abnf_crlf_blank_line_is_a_record ----
+
+def Laws.abnf_crlf_blank_line_is_a_record(sep, hq, a, ha, b):
+  bqC(sep, hq, a, ha, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, Unit{}, b)
+
+# ---- abnf_leading_blank_line_is_a_record ----
+
+def Laws.abnf_leading_blank_line_is_a_record(sep, hq, b):
+  Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, Nil{})}, sep), fin_blk(sep, hq, b, Nil{}))
+
+# ---- abnf_leading_crlf_blank_line_is_a_record ----
+
+def Laws.abnf_leading_crlf_blank_line_is_a_record(sep, hq, b):
+  Equal.sym(A.Ans, gost(SCon{Chr{34}, SCon{Chr{34}, SCon{Chr{10}, b}}}, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, sep), gost(b, Stt{A.MS{}, SNil{}, Nil{}, A.row(SNil{}, Nil{}, Nil{})}, sep), fin_blk(sep, hq, b, Nil{}))
+
 
 # ---- abnf_clean_input_is_one_field ----
 

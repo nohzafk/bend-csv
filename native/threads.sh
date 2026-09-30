@@ -8,7 +8,7 @@
 #
 # Peak resident set comes from macOS's `time -l`.
 
-F=${1:-/tmp/csv-abnf-bench-1mb.csv}
+F=${1:-/tmp/bend-csv-bench-1mb.csv}
 B=$(dirname "$0")/bench
 
 peak() {
@@ -22,6 +22,6 @@ one() {
 }
 
 echo "input: $F"
-one "csv-abnf, default"    "$B" "$F"
-one "csv-abnf, --threads 1"  "$B" --threads 1 "$F"
-one "csv-abnf, --threads 10" "$B" --threads 10 "$F"
+one "bend-csv, default"    "$B" "$F"
+one "bend-csv, --threads 1"  "$B" --threads 1 "$F"
+one "bend-csv, --threads 10" "$B" --threads 10 "$F"

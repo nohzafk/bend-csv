@@ -1,4 +1,4 @@
-// The oracle for csv-abnf: this parser against the reference.
+// The oracle for bend-csv: this parser against the reference.
 //
 //   bun oracle.ts        the sweep; exits 1 on any difference that is not
 //                        classified below
@@ -6,7 +6,12 @@
 //
 // What is compared strictly: whether the input is read at all, and the rows.
 //
-// One difference class, reported as known rather than hidden:
+// Two difference classes, reported as known rather than hidden (the blank-record
+// class is the approved semantic change: this parser keeps a blank line as a
+// record of one empty field, the reference drops it):
+//   * blank records: the rows equal the reference's rows with [""] inserted at
+//     every blank line an independent scan of the input finds (see blanks()).
+//     Any other difference, an extra, missing or misplaced row, fails.
 //   * a CRLF inside an escaped field. This parser keeps the CR (a deliberate
 //     decision: the CR is data), and the reference
 //     normalizes it to LF. A mismatch counts as known only when the input holds
@@ -52,11 +57,49 @@ function b(sep: string, s: string): Canon {
 const same = (p: string[][], q: string[][]) => JSON.stringify(p) === JSON.stringify(q);
 const normalize = (rows: string[][]) => rows.map((r) => r.map((f) => f.split("\r\n").join("\n")));
 
-function klass(x: Canon, y: Canon, input: string): "ok" | "known-crlf" | "bad" {
+// Blank records, found by a scan that does not use the parser: the positions
+// (as a count of non-blank records before it) of every line that is empty at a
+// record start outside quotes: LF, CRLF, or a lone CR that ends the input.
+function blanks(s: string): number[] {
+  const at: number[] = [];
+  let i = 0;
+  let recs = 0;
+  while (i < s.length) {
+    if (s[i] === "\n") { at.push(recs); i += 1; continue; }
+    if (s[i] === "\r" && s[i + 1] === "\n") { at.push(recs); i += 2; continue; }
+    if (s[i] === "\r" && i + 1 === s.length) { at.push(recs); i += 1; continue; }
+    let q = false;
+    while (i < s.length && (q || s[i] !== "\n")) { if (s[i] === '"') q = !q; i += 1; }
+    i += 1;
+    recs += 1;
+  }
+  return at;
+}
+
+// The reference's rows with an empty-field record put back at every blank line.
+function withBlanks(rows: string[][], at: number[]): string[][] {
+  const out: string[][] = [];
+  let k = 0;
+  for (let r = 0; r <= rows.length; r++) {
+    while (k < at.length && at[k] === r) { out.push([""]); k += 1; }
+    if (r < rows.length) out.push(rows[r]);
+  }
+  return out;
+}
+
+// ok: identical. known-crlf: only a CRLF in a quoted field differs.
+// known-blank: differs only by the blank records this parser keeps and the
+// reference drops -- exactly those, at exactly the places the scan finds.
+// known-blank-crlf: both classes at once.
+function klass(x: Canon, y: Canon, input: string): "ok" | "known-crlf" | "known-blank" | "known-blank-crlf" | "bad" {
   if (x.ok !== y.ok) return "bad";
   if (!x.ok) return "ok";
   if (same(x.rows, y.rows)) return "ok";
-  if (input.includes("\r") && same(normalize(x.rows), y.rows)) return "known-crlf";
+  const at = blanks(input);
+  const want = withBlanks(y.rows, at);
+  if (at.length > 0 && same(x.rows, want)) return "known-blank";
+  if (input.includes("\r") && at.length === 0 && same(normalize(x.rows), y.rows)) return "known-crlf";
+  if (input.includes("\r") && at.length > 0 && same(normalize(x.rows), want)) return "known-blank-crlf";
   return "bad";
 }
 
@@ -64,6 +107,8 @@ const show = (s: string) => JSON.stringify(s);
 
 let total = 0;
 let known = 0;
+let knownBlank = 0;
+let knownBoth = 0;
 const wrong = new Map<string, string[]>();
 
 function check(sep: string, cp: number, s: string) {
@@ -76,8 +121,10 @@ function check(sep: string, cp: number, s: string) {
     return;
   }
   const line = `sep=${show(sep)} in=${show(s)} | here=${x.ok ? JSON.stringify(x.rows) : "refused"} ref=${y.ok ? JSON.stringify(y.rows) : "refused"}`;
-  if (k === "known-crlf") {
-    known += 1;
+  if (k !== "bad") {
+    if (k === "known-crlf") known += 1;
+    else if (k === "known-blank") knownBlank += 1;
+    else knownBoth += 1;
     if (verbose) console.log(`known ${line}`);
     return;
   }
@@ -118,7 +165,7 @@ for (const sep of SEPS) {
   }
 }
 
-console.log(`${total} inputs compared; ${known} are the known CRLF-in-a-quoted-field class`);
+console.log(`${total} inputs compared; known classes: ${knownBlank} blank-record, ${known} quoted-CRLF, ${knownBoth} both`);
 if (wrong.size === 0) {
   console.log("AGREE: the parser reads what the reference reads, on every input not classified above");
   process.exit(0);

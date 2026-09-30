@@ -1,9 +1,9 @@
 import Base
 import ./core.bend as A
 
-# csv-abnf's laws.
+# bend-csv's laws.
 #
-# Nine laws about core.bend (the fused walk `go`). Agreement with another CSV parser is not a law
+# Twelve laws about core.bend (the fused walk `go`). Agreement with another CSV parser is not a law
 # here: it is checked by oracle.ts, which is a test, and an oracle can find a bug
 # but proves nothing.
 #
@@ -48,19 +48,56 @@ law abnf_empty_input_is_no_record:
   for +sep: U32
   {A.parse_sep(sep, "") == A.Parsed{Nil{}} : A.Ans}
 
-law abnf_trailing_newline_adds_nothing:
+# Ending an unfinished record adds no row. If the input does not already end
+# at a line end (its last character x is not LF), a final LF only closes the
+# record the end of input would have closed anyway. The law is silent when the
+# input is empty or already ends in LF: there a further LF is a blank line and
+# adds a row (see the blank-line laws).
+law abnf_ending_an_unfinished_record_adds_no_row:
   for +sep: U32
   for +s: String
-  {A.parse_sep(sep, String.append(s, "\n")) == A.parse_sep(sep, s) : A.Ans}
+  for +x: U32
+  for hx: {U32.is_eq(x, 10) == False{} : Bool}
+  {A.parse_sep(sep, String.append(String.append(s, SCon{Chr{x}, SNil{}}), "\n"))
+    == A.parse_sep(sep, String.append(s, SCon{Chr{x}, SNil{}})) : A.Ans}
 
-law abnf_blank_line_adds_nothing:
+# A blank line is a record of one empty field, kept in place: it reads exactly
+# as the line "" (a quoted empty field, which the law
+# abnf_lone_empty_field_keeps_its_row and abnf_quoted_field_is_its_content pin
+# to one row holding one empty field). Stated after any prefix that has not
+# opened a quote (NoQuote), for LF blank lines and CRLF blank lines, and at
+# the very start of the input.
+law abnf_blank_line_is_a_record:
   for +sep: U32
+  for +hq: {U32.is_eq(sep, 34) == False{} : Bool}
   for +a: String
-  for +b: String
   for ha: NoQuote(a)
-  for hb: NoQuote(b)
-  {A.parse_sep(sep, String.append(String.append(String.append(a, "\n"), "\n"), b))
-    == A.parse_sep(sep, String.append(String.append(a, "\n"), b)) : A.Ans}
+  for +b: String
+  {A.parse_sep(sep, String.append(a, String.append("\n\n", b)))
+    == A.parse_sep(sep, String.append(a, String.append("\n\"\"\n", b))) : A.Ans}
+
+law abnf_crlf_blank_line_is_a_record:
+  for +sep: U32
+  for +hq: {U32.is_eq(sep, 34) == False{} : Bool}
+  for +a: String
+  for ha: NoQuote(a)
+  for +b: String
+  {A.parse_sep(sep, String.append(a, String.append("\n\r\n", b)))
+    == A.parse_sep(sep, String.append(a, String.append("\n\"\"\n", b))) : A.Ans}
+
+law abnf_leading_blank_line_is_a_record:
+  for +sep: U32
+  for +hq: {U32.is_eq(sep, 34) == False{} : Bool}
+  for +b: String
+  {A.parse_sep(sep, String.append("\n", b))
+    == A.parse_sep(sep, String.append("\"\"\n", b)) : A.Ans}
+
+law abnf_leading_crlf_blank_line_is_a_record:
+  for +sep: U32
+  for +hq: {U32.is_eq(sep, 34) == False{} : Bool}
+  for +b: String
+  {A.parse_sep(sep, String.append("\r\n", b))
+    == A.parse_sep(sep, String.append("\"\"\n", b)) : A.Ans}
 
 law abnf_clean_input_is_one_field:
   for +sep: U32
