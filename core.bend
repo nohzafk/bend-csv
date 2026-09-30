@@ -1,12 +1,14 @@
+# Fast CSV parser with proofs
 import Base
 
-# Records: every LF (or CRLF) ends a record, so a blank line is a record of one
-# empty field. The end of input ends a record only if one is unfinished, so
-# the empty input holds no record and a final terminator adds no extra row.
-# The parser: one walk over the string, finished fields and records built
-# directly, no token list, no state record.
-# Mode and accumulators are separate arguments of `go`. The character class is
-# computed once per character and ONE match on (mode, class) does the whole step.
+# Reading rules. Every LF (or CRLF) ends a record, so a blank line is a record
+# of one empty field. The end of input ends a record only if one is unfinished,
+# so the empty input holds no record and a final terminator adds no extra row.
+#
+# Shape. One walk over the string builds finished fields and records directly:
+# no token list and no state record. Mode and accumulators are separate
+# arguments of `go`. The character class is computed once per character, and
+# ONE match on (mode, class) does the whole step.
 
 type Ans is Data:
   Parsed{rows: List<&2, List<&2, String>>}
@@ -23,6 +25,8 @@ type CK is Data:
 # mode: S = at field start, B = in bare field, E = in escaped field,
 # Q = just after a quote in an escaped field; SC/BC/QC = the same with one CR
 # held back (it is content only if the next char continues the record).
+# MBad is never built by this file: the walk rejects a bad pair at once. It is
+# the rejected state that PROOF.bend reasons about.
 type FM is Data:
   MS{}
   MB{}
