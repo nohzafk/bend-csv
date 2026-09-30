@@ -23,7 +23,21 @@ const mb = Number(process.argv[2] ?? "1");
 // (the reference normalizes it), and the reason the comparison excludes it.
 const R = ['alpha,"be,ta",42,"say ""hi"""\r\n', '"multi\nline",,x\r\n', 'plain,words here,"",end\r\n'];
 
-if (!(await Bun.file(`${dir}/bench`).exists())) await $`bend ${dir}/bench.bend -o ${dir}/bench`.quiet();
+// Rebuild when a source is newer than the binary. "Compile it only if it is
+// missing" silently benchmarks a stale binary after any change to the core --
+// which is how a whole native table once came out of the previous core, unchanged
+// and entirely believable, with the timestamps to prove it only afterwards.
+async function stale(): Promise<boolean> {
+  const bin = Bun.file(`${dir}/bench`);
+  if (!(await bin.exists())) return true;
+  const built = bin.lastModified;
+  for (const src of [`${dir}/bench.bend`, `${dir}/../core.bend`]) {
+    if ((await Bun.file(src).lastModified) > built) return true;
+  }
+  return false;
+}
+if (await stale()) await $`bend ${dir}/bench.bend -o ${dir}/bench`.quiet();
+console.log(`bench binary built ${new Date(await Bun.file(`${dir}/bench`).lastModified).toISOString()}`);
 
 // The corpus is generated to a whole number of kilobytes, because that is what
 // the reference worker is told, and both must build the identical string --
