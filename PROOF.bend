@@ -14,26 +14,8 @@ import ./vendor/bendlib/packages/bend-mathlib/list.bend as ML
 # The earlier proofs were about the token-list walk and are in git history
 # (ba809ca). Every section below starts open.
 
-# ---- abnf_empty_input_is_no_record ----
+# ---- tools: walk lemmas shared by the laws ----
 
-def Laws.abnf_empty_input_is_no_record(sep):
-  {==}
-
-# ---- abnf_lone_empty_field_keeps_its_row ----
-
-def Laws.abnf_lone_empty_field_keeps_its_row(sep, hq):
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\"\n", A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[""]]} : A.Ans}
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\n", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[""]]} : A.Ans}
-  {==}
-
-# ---- abnf_cr_inside_a_field_is_content ----
-
-def Laws.abnf_cr_inside_a_field_is_content(sep, ha, hb):
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 97)), False{}, ha) : {A.go("a\rb\r\n", A.MS{}, A.cls_go(False{}, False{}, _, False{}), sep, "", [], []) == A.Parsed{[["a\rb"]]} : A.Ans}
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 98)), False{}, hb) : {A.go("b\r\n", A.MBC{}, A.cls_go(False{}, False{}, _, False{}), sep, "a", [], []) == A.Parsed{[["a\rb"]]} : A.Ans}
-  {==}
-
-# ---- abnf_clean_input_is_one_field ----
 #
 # Probe. Clean never leaves mode MB, so `flds` and `rows` ride along unchanged and
 # the text accumulator is the only thing the induction touches.
@@ -50,20 +32,6 @@ def walk_mb(+sep: U32, +s: String, h: Laws.Clean(sep, s), +txt: String, flds: Li
       %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 34)), False{}, hqu) : {A.go(SCon{Chr{x}, t}, A.MB{}, A.cls_go(False{}, False{}, False{}, _), sep, txt, flds, rows) == A.fin(A.MB{}, String.append(txt, SCon{Chr{x}, t}), flds, rows) : A.Ans}
       %MS.append_assoc(txt, SCon{Chr{x}, SNil{}}, t) : {A.go(t, A.MB{}, A.cls_of(sep, t), sep, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows) == A.fin(A.MB{}, _, flds, rows) : A.Ans}
       walk_mb(sep, t, ht, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows)
-
-def Laws.abnf_clean_input_is_one_field(sep, s, h):
-  match s:
-    case SNil{}:
-      {==}
-    case SCon{Chr{+x}, t}:
-      (hse, hqu, hcr, hlf, ht) = h
-      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 10)), False{}, hlf) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(_, Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), Cmp.is_eq(U32.cmp(x, 34))), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
-      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 13)), False{}, hcr) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(False{}, _, Cmp.is_eq(U32.cmp(sep, x)), Cmp.is_eq(U32.cmp(x, 34))), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
-      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, x)), False{}, hse) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(False{}, False{}, _, Cmp.is_eq(U32.cmp(x, 34))), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
-      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 34)), False{}, hqu) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(False{}, False{}, False{}, _), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
-      walk_mb(sep, t, ht, SCon{Chr{x}, SNil{}}, Nil{}, Nil{})
-
-# ---- abnf_separator_makes_two_fields ----
 
 def sep_self(+sep: U32) -> {Cmp.is_eq(U32.cmp(sep, sep)) == True{} : Bool}:
   %Equal.sym(Cmp, U32.cmp(sep, sep), EQ{}, MS.u32_cmp_refl(sep)) : {Cmp.is_eq(_) == True{} : Bool}
@@ -133,11 +101,6 @@ def two_main(+sep: U32, hl: {Cmp.is_eq(U32.cmp(sep, 10)) == False{} : Bool}, hc:
       %two_fin(SCon{Chr{x}, t}, b) : {A.go(String.append(t, SCon{Chr{sep}, b}), A.MB{}, A.cls_of(sep, String.append(t, SCon{Chr{sep}, b})), sep, SCon{Chr{x}, SNil{}}, [], []) == _ : A.Ans}
       walk_mb_sep(sep, hl, hc, t, ht, b, hb, SCon{Chr{x}, SNil{}}, Nil{}, Nil{})
 
-def Laws.abnf_separator_makes_two_fields(sep, hl, hc, a, b, ha, hb):
-  %Equal.sym(String, String.append(String.append(a, SCon{Chr{sep}, SNil{}}), b), String.append(a, String.append(SCon{Chr{sep}, SNil{}}, b)), MS.append_assoc(a, SCon{Chr{sep}, SNil{}}, b)) : {A.parse_sep(sep, _) == A.Parsed{Con{Con{a, Con{b, Nil{}}}, Nil{}}} : A.Ans}
-  two_main(sep, hl, hc, a, ha, b, hb)
-
-# ---- abnf_quoted_field_is_its_content ----
 #
 # In an escaped field (ME) every non-quote character is content, whatever its class.
 def me_step(+b1: Bool, +b2: Bool, +b3: Bool, +x: U32, t: String, +sep: U32, txt: String, flds: List<&2, String>, rows: List<&2, List<&2, String>>, h1: {Cmp.is_eq(U32.cmp(x, 10)) == b1 : Bool}, h2: {Cmp.is_eq(U32.cmp(x, 13)) == b2 : Bool}) -> {A.go(SCon{Chr{x}, t}, A.ME{}, A.cls_go(b1, b2, b3, False{}), sep, txt, flds, rows) == A.go(t, A.ME{}, A.cls_of(sep, t), sep, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows) : A.Ans}:
@@ -165,26 +128,6 @@ def walk_me(+sep: U32, hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +s: 
       %MS.append_assoc(txt, SCon{Chr{x}, SNil{}}, t) : {A.go(SCon{Chr{x}, String.append(t, SCon{Chr{34}, SNil{}})}, A.ME{}, A.cls_go(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), False{}), sep, txt, flds, rows) == A.fin(A.MQ{}, _, flds, rows) : A.Ans}
       Equal.trans(A.Ans, A.go(SCon{Chr{x}, String.append(t, SCon{Chr{34}, SNil{}})}, A.ME{}, A.cls_go(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), False{}), sep, txt, flds, rows), A.go(String.append(t, SCon{Chr{34}, SNil{}}), A.ME{}, A.cls_of(sep, String.append(t, SCon{Chr{34}, SNil{}})), sep, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows), A.fin(A.MQ{}, String.append(String.append(txt, SCon{Chr{x}, SNil{}}), t), flds, rows), me_step(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), x, String.append(t, SCon{Chr{34}, SNil{}}), sep, txt, flds, rows, {==}, {==}), walk_me(sep, hq, t, ht, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows))
 
-def Laws.abnf_quoted_field_is_its_content(sep, hq, s, h):
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go(SCon{Chr{34}, String.append(s, SCon{Chr{34}, SNil{}})}, A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[s]]} : A.Ans}
-  walk_me(sep, hq, s, h, SNil{}, Nil{}, Nil{})
-
-# ---- abnf_doubled_quote_is_one_quote ----
-
-def Laws.abnf_doubled_quote_is_one_quote(sep, hq):
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"a\"\"b\"", A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
-  %Equal.sym(A.Ans, A.go("a\"\"b\"", A.ME{}, A.cls_go(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 97)), False{}), sep, "", [], []), A.go("\"\"b\"", A.ME{}, A.cls_of(sep, "\"\"b\""), sep, String.append("", SCon{Chr{97}, SNil{}}), [], []), me_step(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 97)), 97, "\"\"b\"", sep, "", [], [], {==}, {==})) : {_ == A.Parsed{[["a\"b"]]} : A.Ans}
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\"b\"", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "a", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"b\"", A.MQ{}, A.cls_go(False{}, False{}, _, True{}), sep, "a", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
-  %Equal.sym(A.Ans, A.go("b\"", A.ME{}, A.cls_go(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 98)), False{}), sep, "a\"", [], []), A.go("\"", A.ME{}, A.cls_of(sep, "\""), sep, String.append("a\"", SCon{Chr{98}, SNil{}}), [], []), me_step(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 98)), 98, "\"", sep, "a\"", [], [], {==}, {==})) : {_ == A.Parsed{[["a\"b"]]} : A.Ans}
-  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "a\"b", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
-  {==}
-
-# ---- abnf_blank_line_adds_nothing ----
-
-# ---- abnf_trailing_newline_adds_nothing ----
-
-# ---- machinery for the trailing-newline and blank-line laws ----
 #
 # `Stt` is the walk's state (mode and the three accumulators); `stp` is one step of
 # `go` as a function on it; `gost` runs `go` on a state; `go_step` says `go` on a
@@ -396,10 +339,6 @@ def tn(+sep: U32, +s: String, +st: Stt) -> {gost(String.append(s, SCon{Chr{10}, 
     case SCon{c, t} Stt{m, txt, flds, rows}:
       Equal.trans(A.Ans, gost(String.append(SCon{c, t}, SCon{Chr{10}, SNil{}}), Stt{m, txt, flds, rows}, sep), gost(String.append(t, SCon{Chr{10}, SNil{}}), stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), gost(SCon{c, t}, Stt{m, txt, flds, rows}, sep), go_step(m, A.cls_of(sep, SCon{c, t}), c, String.append(t, SCon{Chr{10}, SNil{}}), sep, txt, flds, rows), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SNil{}}), stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), gost(t, stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), gost(SCon{c, t}, Stt{m, txt, flds, rows}, sep), tn(sep, t, stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows)), Equal.sym(A.Ans, gost(SCon{c, t}, Stt{m, txt, flds, rows}, sep), gost(t, stp(c, m, A.cls_of(sep, SCon{c, t}), txt, flds, rows), sep), go_step(m, A.cls_of(sep, SCon{c, t}), c, t, sep, txt, flds, rows))))
 
-def Laws.abnf_trailing_newline_adds_nothing(sep, s):
-  tn(sep, s, Stt{A.MS{}, SNil{}, Nil{}, Nil{}})
-
-# ---- blank line: machinery ----
 #
 # NotE(m): the walk is not inside an escaped field. NotQ(k): the class is not a quote.
 # A NoQuote run from a non-escaped mode never enters ME, so a blank line after it
@@ -568,8 +507,71 @@ def bl(+sep: U32, +a: String, ha: Laws.NoQuote(a), +st: Stt, hst: NotE(modeof(st
       (hqu, ht) = ha
       Equal.trans(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(t, SCon{Chr{10}, b}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), bl(sep, t, ht, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), stpS_note(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t}), hst, cls_notq(sep, x, t, hqu)), b), Equal.sym(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), gost(String.append(t, SCon{Chr{10}, b}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, b}), st, sep))))
 
+# ---- abnf_empty_input_is_no_record ----
+
+def Laws.abnf_empty_input_is_no_record(sep):
+  {==}
+
+# ---- abnf_trailing_newline_adds_nothing ----
+
+def Laws.abnf_trailing_newline_adds_nothing(sep, s):
+  tn(sep, s, Stt{A.MS{}, SNil{}, Nil{}, Nil{}})
+
+# ---- abnf_blank_line_adds_nothing ----
+
 def Laws.abnf_blank_line_adds_nothing(sep, a, b, ha, hb):
   %MS.append_assoc_sym(String.append(a, SCon{Chr{10}, SNil{}}), SCon{Chr{10}, SNil{}}, b) : {A.parse_sep(sep, _) == A.parse_sep(sep, String.append(String.append(a, SCon{Chr{10}, SNil{}}), b)) : A.Ans}
   %MS.append_assoc_sym(a, SCon{Chr{10}, SNil{}}, b) : {A.parse_sep(sep, String.append(String.append(a, SCon{Chr{10}, SNil{}}), String.append(SCon{Chr{10}, SNil{}}, b))) == A.parse_sep(sep, _) : A.Ans}
   %MS.append_assoc_sym(a, SCon{Chr{10}, SNil{}}, SCon{Chr{10}, b}) : {A.parse_sep(sep, _) == A.parse_sep(sep, String.append(a, SCon{Chr{10}, b})) : A.Ans}
   bl(sep, a, ha, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, Unit{}, b)
+
+# ---- abnf_clean_input_is_one_field ----
+
+def Laws.abnf_clean_input_is_one_field(sep, s, h):
+  match s:
+    case SNil{}:
+      {==}
+    case SCon{Chr{+x}, t}:
+      (hse, hqu, hcr, hlf, ht) = h
+      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 10)), False{}, hlf) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(_, Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), Cmp.is_eq(U32.cmp(x, 34))), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
+      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 13)), False{}, hcr) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(False{}, _, Cmp.is_eq(U32.cmp(sep, x)), Cmp.is_eq(U32.cmp(x, 34))), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
+      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, x)), False{}, hse) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(False{}, False{}, _, Cmp.is_eq(U32.cmp(x, 34))), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
+      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 34)), False{}, hqu) : {A.go(SCon{Chr{x}, t}, A.MS{}, A.cls_go(False{}, False{}, False{}, _), sep, SNil{}, Nil{}, Nil{}) == Laws.CleanAnswer(SCon{Chr{x}, t}) : A.Ans}
+      walk_mb(sep, t, ht, SCon{Chr{x}, SNil{}}, Nil{}, Nil{})
+
+# ---- abnf_separator_makes_two_fields ----
+
+def Laws.abnf_separator_makes_two_fields(sep, hl, hc, a, b, ha, hb):
+  %Equal.sym(String, String.append(String.append(a, SCon{Chr{sep}, SNil{}}), b), String.append(a, String.append(SCon{Chr{sep}, SNil{}}, b)), MS.append_assoc(a, SCon{Chr{sep}, SNil{}}, b)) : {A.parse_sep(sep, _) == A.Parsed{Con{Con{a, Con{b, Nil{}}}, Nil{}}} : A.Ans}
+  two_main(sep, hl, hc, a, ha, b, hb)
+
+# ---- abnf_quoted_field_is_its_content ----
+
+def Laws.abnf_quoted_field_is_its_content(sep, hq, s, h):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go(SCon{Chr{34}, String.append(s, SCon{Chr{34}, SNil{}})}, A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[s]]} : A.Ans}
+  walk_me(sep, hq, s, h, SNil{}, Nil{}, Nil{})
+
+# ---- abnf_doubled_quote_is_one_quote ----
+
+def Laws.abnf_doubled_quote_is_one_quote(sep, hq):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"a\"\"b\"", A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(A.Ans, A.go("a\"\"b\"", A.ME{}, A.cls_go(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 97)), False{}), sep, "", [], []), A.go("\"\"b\"", A.ME{}, A.cls_of(sep, "\"\"b\""), sep, String.append("", SCon{Chr{97}, SNil{}}), [], []), me_step(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 97)), 97, "\"\"b\"", sep, "", [], [], {==}, {==})) : {_ == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\"b\"", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "a", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"b\"", A.MQ{}, A.cls_go(False{}, False{}, _, True{}), sep, "a", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(A.Ans, A.go("b\"", A.ME{}, A.cls_go(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 98)), False{}), sep, "a\"", [], []), A.go("\"", A.ME{}, A.cls_of(sep, "\""), sep, String.append("a\"", SCon{Chr{98}, SNil{}}), [], []), me_step(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 98)), 98, "\"", sep, "a\"", [], [], {==}, {==})) : {_ == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "a\"b", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  {==}
+
+# ---- abnf_lone_empty_field_keeps_its_row ----
+
+def Laws.abnf_lone_empty_field_keeps_its_row(sep, hq):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\"\n", A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[""]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\n", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[""]]} : A.Ans}
+  {==}
+
+# ---- abnf_cr_inside_a_field_is_content ----
+
+def Laws.abnf_cr_inside_a_field_is_content(sep, ha, hb):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 97)), False{}, ha) : {A.go("a\rb\r\n", A.MS{}, A.cls_go(False{}, False{}, _, False{}), sep, "", [], []) == A.Parsed{[["a\rb"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 98)), False{}, hb) : {A.go("b\r\n", A.MBC{}, A.cls_go(False{}, False{}, _, False{}), sep, "a", [], []) == A.Parsed{[["a\rb"]]} : A.Ans}
+  {==}
