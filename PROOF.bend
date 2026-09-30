@@ -398,3 +398,178 @@ def tn(+sep: U32, +s: String, +st: Stt) -> {gost(String.append(s, SCon{Chr{10}, 
 
 def Laws.abnf_trailing_newline_adds_nothing(sep, s):
   tn(sep, s, Stt{A.MS{}, SNil{}, Nil{}, Nil{}})
+
+# ---- blank line: machinery ----
+#
+# NotE(m): the walk is not inside an escaped field. NotQ(k): the class is not a quote.
+# A NoQuote run from a non-escaped mode never enters ME, so a blank line after it
+# is the same state as the line end before it.
+def NotE(+m: A.FM) -> Type:
+  match m:
+    case A.ME{}:
+      Empty
+    case _:
+      Unit
+
+def NotQ(+k: A.CK) -> Type:
+  match k:
+    case A.CQuote{}:
+      Empty
+    case _:
+      Unit
+
+def modeof(+st: Stt) -> A.FM:
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      m
+
+def cls_go_nq(+lf: Bool, +cr: Bool, +sb: Bool) -> NotQ(A.cls_go(lf, cr, sb, False{})):
+  match lf cr sb:
+    case True{} _ _:
+      Unit{}
+    case False{} True{} _:
+      Unit{}
+    case False{} False{} True{}:
+      Unit{}
+    case False{} False{} False{}:
+      Unit{}
+
+def cls_notq(+sep: U32, +x: U32, t: String, hqu: {Cmp.is_eq(U32.cmp(x, 34)) == False{} : Bool}) -> NotQ(A.cls_of(sep, SCon{Chr{x}, t})):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 34)), False{}, hqu) : NotQ(A.cls_go(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), _))
+  cls_go_nq(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)))
+
+def stp_note(+c: Char, +m: A.FM, +k: A.CK, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, hm: NotE(m), hk: NotQ(k)) -> NotE(modeof(stp(c, m, k, txt, flds, rows))):
+  match m k:
+    case A.MS{} A.CLf{}:
+      Unit{}
+    case A.MS{} A.CCr{}:
+      Unit{}
+    case A.MS{} A.CSep{}:
+      Unit{}
+    case A.MS{} A.CQuote{}:
+      match hk:
+    case A.MS{} A.CText{}:
+      Unit{}
+    case A.MB{} A.CLf{}:
+      Unit{}
+    case A.MB{} A.CCr{}:
+      Unit{}
+    case A.MB{} A.CSep{}:
+      Unit{}
+    case A.MB{} A.CQuote{}:
+      match hk:
+    case A.MB{} A.CText{}:
+      Unit{}
+    case A.ME{} A.CLf{}:
+      match hm:
+    case A.ME{} A.CCr{}:
+      match hm:
+    case A.ME{} A.CSep{}:
+      match hm:
+    case A.ME{} A.CQuote{}:
+      match hm:
+    case A.ME{} A.CText{}:
+      match hm:
+    case A.MQ{} A.CLf{}:
+      Unit{}
+    case A.MQ{} A.CCr{}:
+      Unit{}
+    case A.MQ{} A.CSep{}:
+      Unit{}
+    case A.MQ{} A.CQuote{}:
+      match hk:
+    case A.MQ{} A.CText{}:
+      Unit{}
+    case A.MSC{} A.CLf{}:
+      Unit{}
+    case A.MSC{} A.CCr{}:
+      Unit{}
+    case A.MSC{} A.CSep{}:
+      Unit{}
+    case A.MSC{} A.CQuote{}:
+      match hk:
+    case A.MSC{} A.CText{}:
+      Unit{}
+    case A.MBC{} A.CLf{}:
+      Unit{}
+    case A.MBC{} A.CCr{}:
+      Unit{}
+    case A.MBC{} A.CSep{}:
+      Unit{}
+    case A.MBC{} A.CQuote{}:
+      match hk:
+    case A.MBC{} A.CText{}:
+      Unit{}
+    case A.MQC{} A.CLf{}:
+      Unit{}
+    case A.MQC{} A.CCr{}:
+      Unit{}
+    case A.MQC{} A.CSep{}:
+      Unit{}
+    case A.MQC{} A.CQuote{}:
+      match hk:
+    case A.MQC{} A.CText{}:
+      Unit{}
+    case A.MBad{} A.CLf{}:
+      Unit{}
+    case A.MBad{} A.CCr{}:
+      Unit{}
+    case A.MBad{} A.CSep{}:
+      Unit{}
+    case A.MBad{} A.CQuote{}:
+      match hk:
+    case A.MBad{} A.CText{}:
+      Unit{}
+
+def stpS(+c: Char, +st: Stt, +k: A.CK) -> Stt:
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      stp(c, m, k, txt, flds, rows)
+
+def stpS_note(+c: Char, +st: Stt, +k: A.CK, hm: NotE(modeof(st)), hk: NotQ(k)) -> NotE(modeof(stpS(c, st, k))):
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      stp_note(c, m, k, txt, flds, rows, hm, hk)
+
+def go_stepS(+c: Char, +t: String, +st: Stt, +sep: U32) -> {gost(SCon{c, t}, st, sep) == gost(t, stpS(c, st, A.cls_of(sep, SCon{c, t})), sep) : A.Ans}:
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      go_step(m, A.cls_of(sep, SCon{c, t}), c, t, sep, txt, flds, rows)
+
+def bl_base2(+m: A.FM, +sep: U32, +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>, hm: NotE(m), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{10}, b}}, Stt{m, txt, flds, rows}, sep) == gost(SCon{Chr{10}, b}, Stt{m, txt, flds, rows}, sep) : A.Ans}:
+  match m:
+    case A.MS{}:
+      {==}
+    case A.MB{}:
+      {==}
+    case A.ME{}:
+      match hm:
+    case A.MQ{}:
+      {==}
+    case A.MSC{}:
+      {==}
+    case A.MBC{}:
+      {==}
+    case A.MQC{}:
+      {==}
+    case A.MBad{}:
+      {==}
+
+def bl_base(+st: Stt, +sep: U32, hm: NotE(modeof(st)), +b: String) -> {gost(SCon{Chr{10}, SCon{Chr{10}, b}}, st, sep) == gost(SCon{Chr{10}, b}, st, sep) : A.Ans}:
+  match st:
+    case Stt{+m, +txt, +flds, +rows}:
+      bl_base2(m, sep, txt, flds, rows, hm, b)
+
+def bl(+sep: U32, +a: String, ha: Laws.NoQuote(a), +st: Stt, hst: NotE(modeof(st)), +b: String) -> {gost(String.append(a, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep) == gost(String.append(a, SCon{Chr{10}, b}), st, sep) : A.Ans}:
+  match a:
+    case SNil{}:
+      bl_base(st, sep, hst, b)
+    case SCon{Chr{+x}, t}:
+      (hqu, ht) = ha
+      Equal.trans(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), st, sep), Equal.trans(A.Ans, gost(String.append(t, SCon{Chr{10}, SCon{Chr{10}, b}}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(t, SCon{Chr{10}, b}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), bl(sep, t, ht, stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), stpS_note(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t}), hst, cls_notq(sep, x, t, hqu)), b), Equal.sym(A.Ans, gost(String.append(SCon{Chr{x}, t}, SCon{Chr{10}, b}), st, sep), gost(String.append(t, SCon{Chr{10}, b}), stpS(Chr{x}, st, A.cls_of(sep, SCon{Chr{x}, t})), sep), go_stepS(Chr{x}, String.append(t, SCon{Chr{10}, b}), st, sep))))
+
+def Laws.abnf_blank_line_adds_nothing(sep, a, b, ha, hb):
+  %MS.append_assoc_sym(String.append(a, SCon{Chr{10}, SNil{}}), SCon{Chr{10}, SNil{}}, b) : {A.parse_sep(sep, _) == A.parse_sep(sep, String.append(String.append(a, SCon{Chr{10}, SNil{}}), b)) : A.Ans}
+  %MS.append_assoc_sym(a, SCon{Chr{10}, SNil{}}, b) : {A.parse_sep(sep, String.append(String.append(a, SCon{Chr{10}, SNil{}}), String.append(SCon{Chr{10}, SNil{}}, b))) == A.parse_sep(sep, _) : A.Ans}
+  %MS.append_assoc_sym(a, SCon{Chr{10}, SNil{}}, SCon{Chr{10}, b}) : {A.parse_sep(sep, _) == A.parse_sep(sep, String.append(a, SCon{Chr{10}, b})) : A.Ans}
+  bl(sep, a, ha, Stt{A.MS{}, SNil{}, Nil{}, Nil{}}, Unit{}, b)
