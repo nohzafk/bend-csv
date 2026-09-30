@@ -166,6 +166,15 @@ def Laws.abnf_quoted_field_is_its_content(sep, hq, s, h):
 
 # ---- abnf_doubled_quote_is_one_quote ----
 
+def Laws.abnf_doubled_quote_is_one_quote(sep, hq):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"a\"\"b\"", A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(A.Ans, A.go("a\"\"b\"", A.ME{}, A.cls_go(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 97)), False{}), sep, "", [], []), A.go("\"\"b\"", A.ME{}, A.cls_of(sep, "\"\"b\""), sep, String.append("", SCon{Chr{97}, SNil{}}), [], []), me_step(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 97)), 97, "\"\"b\"", sep, "", [], [], {==}, {==})) : {_ == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\"b\"", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "a", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"b\"", A.MQ{}, A.cls_go(False{}, False{}, _, True{}), sep, "a", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(A.Ans, A.go("b\"", A.ME{}, A.cls_go(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 98)), False{}), sep, "a\"", [], []), A.go("\"", A.ME{}, A.cls_of(sep, "\""), sep, String.append("a\"", SCon{Chr{98}, SNil{}}), [], []), me_step(False{}, False{}, Cmp.is_eq(U32.cmp(sep, 98)), 98, "\"", sep, "a\"", [], [], {==}, {==})) : {_ == A.Parsed{[["a\"b"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "a\"b", [], []) == A.Parsed{[["a\"b"]]} : A.Ans}
+  {==}
+
 # ---- abnf_blank_line_adds_nothing ----
 
 # ---- abnf_trailing_newline_adds_nothing ----
