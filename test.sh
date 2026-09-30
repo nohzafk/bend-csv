@@ -74,12 +74,18 @@ echo "== 6. the proofs =="
 OUT=$(bend --check-only PROOF.bend 2>&1) || { echo "$OUT"; echo "FAIL: the proofs do not check"; exit 1; }
 echo "$OUT"
 echo "$OUT" | grep -q "^ALL PROOFS CHECK" || { echo "FAIL: no ALL PROOFS CHECK verdict"; exit 1; }
-# The same file again through the BendTT kernel. --check-only alone can pass
-# while the kernel disagrees; a kernel recheck prints no "Use --verdict" hint.
-OUT=$(bend PROOF.bend --verdict 2>&1) || { echo "$OUT"; echo "FAIL: the kernel recheck rejects the proofs"; exit 1; }
-echo "$OUT"
-echo "$OUT" | grep -q "^ALL PROOFS CHECK" || { echo "FAIL: the kernel recheck gave no ALL PROOFS CHECK verdict"; exit 1; }
-echo "$OUT" | grep -q "Use --verdict" && { echo "FAIL: --verdict ran as a plain check"; exit 1; }
+# The same file again through the BendTT kernel, where the kernel can be built
+# (it needs Lean; CI has none, and trusts the compiler's own check instead).
+# Only "the kernel did not build" skips. A kernel that runs and rejects fails.
+if OUT=$(bend PROOF.bend --verdict 2>&1); then
+  echo "$OUT"
+  echo "$OUT" | grep -q "^ALL PROOFS CHECK" || { echo "FAIL: the kernel recheck gave no ALL PROOFS CHECK verdict"; exit 1; }
+  echo "$OUT" | grep -q "Use --verdict" && { echo "FAIL: --verdict ran as a plain check"; exit 1; }
+elif echo "$OUT" | grep -q "the kernel did not build"; then
+  echo "SKIP: kernel recheck (no BendTT kernel here: $(echo "$OUT" | head -1 | cut -c1-90))"
+else
+  echo "$OUT"; echo "FAIL: the kernel recheck rejects the proofs"; exit 1
+fi
 
 echo "== 7. every law has a mutant that breaks its own proof =="
 if ! bun check_mutants.ts > /tmp/bend-csv-mutants.log 2>&1; then

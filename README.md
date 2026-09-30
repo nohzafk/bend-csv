@@ -216,7 +216,7 @@ Tests can expose bugs; they do not extend the scope of a proof.
 
 The current twelve proofs pass both Bend 2.0.34's `--check-only` and the
 BendTT kernel recheck (`bend --verdict PROOF.bend`). The automated suite runs
-both. See the [toolchain notes](NOTES.md#the---verdict-caveat).
+the kernel recheck wherever the kernel builds (not in CI). See the [toolchain notes](NOTES.md#the---verdict-caveat).
 
 ## Format details
 

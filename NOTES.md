@@ -41,7 +41,8 @@ The gate has eight steps. Each can fail.
 
 `bend --verdict PROOF.bend` rechecks the proofs with the BendTT kernel.
 The current twelve proofs pass this check on Bend 2.0.34. The automated gate
-runs both `--check-only` and `--verdict` (step 6). Older proofs in
+runs `--check-only` everywhere and `--verdict` wherever the kernel can be built
+(step 6; it needs Lean, which CI does not install, so CI prints `SKIP` for that line). Older proofs in
 this toolchain had checker/kernel disagreements; that is not the result for
 the current proof file.
 
