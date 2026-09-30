@@ -19,11 +19,6 @@
 set -e
 cd "$(dirname "$0")"
 
-# The proofs library arrives as a submodule, so a checkout without it is not
-# broken, it is incomplete -- and this says which, instead of letting bend report
-# a path it cannot find.
-test -f vendor/bendlib/packages/bend-mathlib/string.bend || { echo "FAIL: vendor/bendlib is empty -- run: git submodule update --init"; exit 1; }
-
 # The Bend release this repository declares (BEND_VERSION). When that release
 # is not installed the gate skips itself, printing why.
 WANT=$(cat BEND_VERSION)

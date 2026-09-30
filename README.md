@@ -20,7 +20,7 @@ CSV produces an error without a location or detailed explanation.
 ## Getting started
 
 Bend callers need Bend 2.0.34. TypeScript callers use `bridge.ts` and the
-included prebuilt module; they do not need Bend, the emitter, or submodules.
+included prebuilt module; they do not need Bend or the emitter.
 Build and verification tools are listed in the contributing section below.
 
 ### Bend
@@ -275,7 +275,6 @@ Building and verification need Bend exactly as in
 to install the pinned `bend-emit@0.3.0` build dependency.
 
 ```sh
-git submodule update --init      # vendor/bendlib, for the proofs
 bun install --frozen-lockfile    # verification dependencies
 sh scripts/build.sh              # core.bend -> dist/core.mjs + dist/core.d.mts
 sh test.sh                       # builds the same way, then runs the full gate

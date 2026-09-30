@@ -11,7 +11,7 @@ The gate has eight steps. Each can fail.
 1. The core checks (`bend --check-only core.bend` prints `ALL PROOFS CHECK`), and no
    proof of it rests on unsafe code.
 2. The core builds into a typed module in `dist/` with `scripts/build.sh`,
-   which runs the local `bend-emit@0.3.0` dev dependency (not a submodule).
+   which runs the local `bend-emit@0.3.0` dev dependency.
    `bend-emit` exits 0 even when Bend cannot compile the file, so the
    script reads its log as well as the exit code, and deletes the old module
    first. Otherwise the oracle would measure a stale module. `dist/` is
@@ -34,7 +34,7 @@ The gate has eight steps. Each can fail.
 8. The library stands alone: no `*.bend` file imports from outside the repository.
    The step greps only `*.bend` files, so this file cannot trip it.
 
-`test.sh` also checks that `vendor/` is not empty, and skips itself (`SKIP`, exit
+`test.sh` skips itself (`SKIP`, exit
 0) when the installed Bend is not the release in `BEND_VERSION`.
 
 ### The `--verdict` caveat
@@ -223,14 +223,15 @@ through `bridge.ts`. Those figures are older than the table in the README (265 m
 
 ## What a checkout carries
 
-`git clone --recurse-submodules` (or `git submodule update --init` after a plain
-clone) fetches `vendor/bendlib` (the proofs library; the emitter is not vendored). `bun install` fetches the dev dependency.
+`bun install` fetches the dev dependencies. Bend fetches the proofs library
+(`bend-mathlib@0.7.0.0` from the Bend hub) when it checks `PROOF.bend`, so that step needs
+network access the first time. Nothing is vendored.
 
 | | needs |
 | --- | --- |
 | `core.bend` | nothing: it imports `Base` alone |
-| `LAWS.bend`, `PROOF.bend` | `vendor/bendlib/packages/bend-mathlib` (the list and string lemmas), a submodule |
-| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.3.0`; not a submodule) |
+| `LAWS.bend`, `PROOF.bend` | `bend-mathlib@0.7.0.0` from the Bend hub (the list and string lemmas) |
+| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.3.0`) |
 | `oracle.ts` | `reference/std` (Deno's `@std/csv`, MIT), a plain directory |
 | `falsify.ts`, `check_mutants.ts` | `bend-falsify`, a dev dependency pinned in `package.json` |
 | `native/` | nothing: `bend` builds it |
@@ -254,8 +255,8 @@ imports, and it prints the import line. A publish is public and permanent. A
 MIT-0, and adding one later changes the hash, so it would be a new version. The
 proofs need not ship with the claim: a law left open in one file can be filled in
 another, which is how `LAWS.bend` and `PROOF.bend` are split. If the proofs are
-published too, they drag the vendored mathlib along: 452 KB of lemmas the parser
-does not need. Nothing has been published.
+published too, they import `bend-mathlib` (452 KB of lemmas the parser does not need),
+which the hub then serves along with them. Nothing has been published.
 
 An unnamed publish gives a content-hash import (`import 0x<hash>/core.bend as C`).
 

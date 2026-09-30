@@ -1,8 +1,8 @@
 import Base
 import ./LAWS.bend as Laws
 import ./core.bend as A
-import ./vendor/bendlib/packages/bend-mathlib/string.bend as MS
-import ./vendor/bendlib/packages/bend-mathlib/list.bend as ML
+import bend-mathlib@0.7.0.0/string.bend as MS
+import bend-mathlib@0.7.0.0/list.bend as ML
 
 # bend-csv's proofs, against the fused core (one walk `go`, no token list).
 # The gate is `bend PROOF.bend`.
