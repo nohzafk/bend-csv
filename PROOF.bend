@@ -28,6 +28,11 @@ def Laws.abnf_lone_empty_field_keeps_its_row(sep, hq):
 
 # ---- abnf_cr_inside_a_field_is_content ----
 
+def Laws.abnf_cr_inside_a_field_is_content(sep, ha, hb):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 97)), False{}, ha) : {A.go("a\rb\r\n", A.MS{}, A.cls_go(False{}, False{}, _, False{}), sep, "", [], []) == A.Parsed{[["a\rb"]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 98)), False{}, hb) : {A.go("b\r\n", A.MBC{}, A.cls_go(False{}, False{}, _, False{}), sep, "a", [], []) == A.Parsed{[["a\rb"]]} : A.Ans}
+  {==}
+
 # ---- abnf_clean_input_is_one_field ----
 #
 # Probe. Clean never leaves mode MB, so `flds` and `rows` ride along unchanged and
