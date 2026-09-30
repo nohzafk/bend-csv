@@ -10,11 +10,15 @@
 // stated on the rows and on whether a file was read at all), so a host that
 // needs to know *where* a defect is wants a parser that reports positions, such as Deno's @std/csv.
 //
-// SIZE. The parser holds a token per character and reads the input three times,
-// so this path costs memory rather than stack: about 400 MB of heap per MB of
-// input, against the native build's 74, and a 10 MB file takes 1.8 s and 4 GB.
-// A host parsing very large files should prefer the native build
-// (`bend native/bench.bend -o native/bench`).
+// A separator the parser would read as itself -- LF, CR, the quote -- or one that
+// is not a single character, throws TypeError: that is a bad call, not a bad file.
+//
+// SIZE. One 10 MB parse costs about 265 ms and 400 MB of process. Of that, the
+// live heap after a collection is 193 MB: the input and the result. The rest is
+// transient, each field's text built one character at a time. Stack is not a
+// limit -- the walk compiles to a loop -- so this path reads a whole file. A host
+// parsing very large files may still prefer the native build, which does the same
+// work in 147 ms and 172 MB (`bend native/bench.bend -o native/bench`).
 //
 // The byte-order mark is stripped here, because that is the host's job.
 //

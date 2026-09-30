@@ -1,7 +1,7 @@
 import Base
 
-# THROWAWAY fused core v2 (measurement only, no laws): one walk over the string,
-# finished fields and records built directly, no token list, no state record.
+# The parser: one walk over the string, finished fields and records built
+# directly, no token list, no state record.
 # Mode and accumulators are separate arguments of `go`. The character class is
 # computed once per character and ONE match on (mode, class) does the whole step.
 

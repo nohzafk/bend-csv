@@ -145,7 +145,7 @@ def describe(r: C.Ans) -> String:
 def main() -> IO(Unit):
   do IO<Unit>:
     IO.print(describe(C.parse("a,b\r\nc,d\r\n")))     # read 2 rows
-    IO.print(describe(C.parse_sep(59, "a;b\r\n")))    # read 1 rows
+    IO.print(describe(C.parse_sep(59, "a;b\r\nc;d\r\n")))   # read 2 rows
     IO.print(describe(C.parse("a,\"b")))              # not a file of the format
 ```
 
