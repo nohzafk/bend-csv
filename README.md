@@ -4,8 +4,9 @@ RFC 4180 CSV parsing in Bend, written in the shape of the grammar it implements,
 with a machine-checked proof for each of its laws. Nine laws, all proved; one
 entry point for Bend, one for a JavaScript or TypeScript host.
 
-The parser is layered so that the rules of the grammar are visible in the code
-and each rule is a law. It is tested against Deno's `@std/csv` (vendored in
+The parser is one walk over the input -- the mode it is in and what it has read
+so far are passed as arguments -- so the rules of the grammar are the cases of
+that walk, and each rule is a law. It is tested against Deno's `@std/csv` (vendored in
 `reference/std`) as an oracle, but an oracle can find a bug and proves nothing;
 the proofs are what settle the laws.
 
@@ -72,20 +73,21 @@ purpose: the core reads those characters as themselves, so a host passing one
 would get the reading of a file whose separator never appears. Adding the check
 to the core would be a new claim, and here every claim has a law.
 
-**This path is for small inputs.** bend-emit and `bend -o .mjs` both compile each
-recursive walk into a JavaScript recursion -- one frame per character, no tail
-call in an object field -- so 16 KB reads and 64 KB ends in a `RangeError` from
-the runtime rather than from this library. That ceiling is the lane's, not this
-library's: any Bend code compiled to JavaScript this way has it. For bulk input,
-build the parser natively (`bend native/bench.bend -o native/bench`).
+There is no input-size ceiling on this path: the walk compiles to a loop in the
+emitted module, so a host can hand it a whole file. The largest measured is 10 MB
+-- 582,543 rows, 656 ms, 690 MB of process, through `bridge.ts`. Bend's JavaScript
+lane does impose such a ceiling on other shapes: a self-call in a field that is
+not the last one becomes a JavaScript recursion, one frame per character. For the
+fastest reading of bulk input, build the parser natively
+(`bend native/bench.bend -o native/bench`).
 
 ## What is proved, and how
 
 | | |
 | --- | --- |
 | the laws | nine, in `LAWS.bend`; `bend --check-only PROOF.bend` says `ALL PROOFS CHECK` |
-| the parser | `core.bend`, 366 lines; `bend --check-only core.bend` says the same |
-| the proofs | `PROOF.bend`, 951 lines, one section per law |
+| the parser | `core.bend`, 174 lines; `bend --check-only core.bend` says the same |
+| the proofs | `PROOF.bend`, 577 lines, one section per law |
 
 The gate checks, in order: the core; the module the toolchain builds; the bridge
 a host uses; the parser against the reference over ~190k inputs; every law
@@ -125,9 +127,9 @@ Three refinements, each measured against the reference and each what a first
 guess gets wrong:
 
 - **a blank line is not a record.** `record` as written can be an empty field, so
-  the grammar over-generates here; the reading drops it. Here it falls
-  out of the data: a record with no tokens is no record, and `""` is two tokens,
-  not none.
+  the grammar over-generates here; the reading drops it. It falls out of the step:
+  a line end met before any field has begun closes nothing, while `""` has already
+  begun one, so it is a record holding one empty field.
 - **a CR the line does not end at is content.** CR is not TEXTDATA, but `a\rb` is
   one field. A record ends at LF, at CRLF, or at a CR the input ends on.
 - **a trailing newline adds no record.**
@@ -140,9 +142,12 @@ helper's result as a subterm. So "peel a piece with a helper, then recurse on
 what it left" cannot be written, and a pass that consumes to a variable depth is
 one walk whose self-call takes a pattern-bound tail. What that leaves:
 
-- **one walk per level of the grammar** -- records, fields, then the field's own
-  text -- each with its input as the first parameter and its position in a mode;
-- **between the levels, a map** whose recursion also takes a pattern-bound tail.
+- **one walk for the whole grammar** -- a record ending, a field ending and the
+  field's own text all decided at the same character -- with the input as the first
+  parameter, the mode it is in second, and what has been read in the rest;
+- **a mode for each position in the grammar** -- the start of a field, a bare
+  field, an escaped one, just after a quote, and three more that hold a CR back
+  until the next character says whether it ended the line or was content.
 
 Nothing recurses on a computed value, and nothing matches one: the modes are
 parameters and a character's kind is a constructor.
@@ -151,11 +156,18 @@ The law that makes the point is `abnf_doubled_quote_is_one_quote`: RFC 4180's
 `2DQUOTE` alternative -- two quotes in the text are one quote in the field -- is
 a rule that tests alone tend to leave to chance, and here it is a law.
 
-The walks, concretely: one walk per level, with four modes for the field walk
-(`RRec`, `REsc`, `REscQ`, `RCr`). The state is the row and the field being read,
-with no positions. "The line has begun" is read off the data (a record of no
-tokens is no record), field content is built in reading order, and a CR is one
-mode: the CR is held until the next token decides what it was.
+The state is the mode, the text of the field being read, the fields of the record
+being read, and the rows finished, with no positions anywhere. A separator closes
+a field, a line end closes a record, and the CR is held in a mode of its own.
+
+Fusing the walk is also what made the proofs smaller. The shape before this one
+had a walk per level of the grammar with a map between them, and a proof about a
+list has to reason about the list it is handed, so it needed mirrored functions
+-- `tx`, `push`, `add_push`, `one_cons` -- whose only job was to undo the order a
+layer had accumulated in. With one walk there is nothing to mirror: each mode's
+induction hypothesis says what the walk does to the input that is left, and two
+mathlib facts about `String.append` close the steps. `PROOF.bend` went from 951
+lines to 577 while proving the same nine laws.
 
 ## The laws
 
@@ -189,51 +201,60 @@ newline with empty fields; an empty quoted field), repeated to the target size,
 CRLF line ends, never a CRLF inside a quoted field -- on a 14-core Apple machine
 with 36 GB of memory. The two scripts are `native/scale.ts` and `bench_js.ts`.
 
-Both tables come from one run of one script, minutes apart at best: peak memory
-repeats closely, timing does not -- the same 10 MB parse has come out anywhere
-between 1.1 s and 1.8 s. Treat the time columns as a factor, not a figure.
+Each table comes from one run of one script, and the runs are minutes apart at
+best. Peak memory repeats closely; timing does not. The same 10 MB parse in the
+JavaScript lane has come out at 437 ms and 450 ms on consecutive runs, and a
+machine under other load moves it further. Treat the time columns as a factor,
+not a figure.
 
 ### The native lane
 
 `bend native/bench.bend -o native/bench`. One run per size, timed by the
-benchmark itself, peak resident set from macOS's `time -l`.
+benchmark itself, peak resident set from macOS's `time -l`. `native/scale.ts`
+rebuilds that binary when `core.bend` is newer than it, and prints when the binary
+it used was built -- a table taken from a stale binary is wrong in a way that
+looks exactly like a table taken from a good one.
 
 | input | time | throughput | peak RSS |
 | --- | --- | --- | --- |
-| 0.5 MB | 10 ms | 50 MB/s | 39 MB |
-| 1 MB | 21 ms | 48 MB/s | 76 MB |
-| 2 MB | 41 ms | 49 MB/s | 150 MB |
-| 5 MB | 108 ms | 46 MB/s | 373 MB |
-| 10 MB | 207 ms | 48 MB/s | 744 MB |
-| 20 MB | 417 ms | 48 MB/s | 1486 MB |
-| 40 MB | 844 ms | 47 MB/s | 2970 MB |
+| 0.5 MB | 5 ms | 100 MB/s | 11 MB |
+| 1 MB | 11 ms | 91 MB/s | 19 MB |
+| 2 MB | 24 ms | 83 MB/s | 36 MB |
+| 5 MB | 70 ms | 71 MB/s | 87 MB |
+| 10 MB | 147 ms | 68 MB/s | 172 MB |
+| 20 MB | 304 ms | 66 MB/s | 342 MB |
+| 40 MB | 623 ms | 64 MB/s | 682 MB |
 
-Time and memory are both linear in the input, and nothing runs out of stack: 40
-million characters read. The parser conses a token per character and reads the
-input three times, so what ends a run is memory -- about 74 MB of heap per MB of
-input. On 36 GB that puts the limit near half a gigabyte of CSV; that projection
-is arithmetic, not a measurement, and the largest input measured is 40 MB.
+Time is linear in the input and memory is linear behind it, at about 17 MB of
+process per MB of input by 40 MB: the input and the result, because the walk holds
+nothing per character. Nothing runs out of stack either -- 40 million characters,
+1.7 million rows. Throughput tapers with size, from 100 MB/s on half a megabyte to
+64 MB/s on forty; that is the cache and the allocator, not the walk. On 36 GB the
+arithmetic puts the limit near two gigabytes of CSV. It is arithmetic, not a
+measurement, and the largest input measured is 40 MB.
 
 Against the reference, on the same corpus and by the same method
 (`bun native/scale.ts <MB>` runs both):
 
 | input | this parser (native) | Deno's `@std/csv` (in bun) |
 | --- | --- | --- |
-| 0.1 MB | 2 ms, 9 MB | 4.2 ms, 26 MB |
-| 1 MB | 20 ms, 76 MB | 33 ms, 50 MB |
-| 10 MB | 210 ms, 744 MB | 298 ms, 283 MB |
+| 0.1 MB | 2 ms, 4 MB | 4.4 ms, 26 MB |
+| 1 MB | 11 ms, 19 MB | 33 ms, 50 MB |
+| 10 MB | 147 ms, 172 MB | 291 ms, 284 MB |
 
-So it is about 1.4x faster than the reference at 10 MB, and lighter than it below
-a few hundred kilobytes -- there is no runtime to start -- but about 2.6x heavier
-in memory at scale: 74 MB per MB of input against 28.
+So it is about twice as fast as the reference at every size from 0.1 MB up, and
+lighter than it at every size too: 172 MB against 284 MB at 10 MB, and 682 MB
+against 884 MB at 40 MB, which is 17 MB per MB of input against 22. The reference
+is a JavaScript parser and this is a native binary, so read the comparison as what
+a host gets from each, not as one language being faster than another.
 
 Threads do not enter into it: the parse is one dependent chain, so there is
 nothing for the runtime to split.
 
 | 5 MB, threads | time | peak RSS |
 | --- | --- | --- |
-| default | 104 ms | 373 MB |
-| `--threads 10` | 104 ms | 373 MB |
+| default | 70 ms | 87 MB |
+| `--threads 10` | 71 ms | 87 MB |
 
 `sh native/threads.sh <file>` repeats that on any file.
 
@@ -245,26 +266,26 @@ set (`bun bench_js.ts`):
 
 | input | this parser | Deno's `@std/csv` |
 | --- | --- | --- |
-| 1 KB | 2 ms, 20 MB | 1 ms, 15 MB |
-| 4 KB | 3 ms, 24 MB | 1 ms, 17 MB |
-| 16 KB | 5 ms, 32 MB | 2 ms, 20 MB |
-| 64 KB | 13 ms, 48 MB | 3 ms, 24 MB |
-| 256 KB | 36 ms, 120 MB | 9 ms, 34 MB |
-| 1 MB | 125 ms, 368 MB | 35 ms, 50 MB |
-| 10 MB | 1.1 s, 2894 MB | 290 ms, 288 MB |
+| 1 KB | 1 ms, 19 MB | 1 ms, 15 MB |
+| 4 KB | 2 ms, 19 MB | 1 ms, 17 MB |
+| 16 KB | 2 ms, 24 MB | 2 ms, 20 MB |
+| 64 KB | 5 ms, 31 MB | 3 ms, 24 MB |
+| 256 KB | 15 ms, 43 MB | 9 ms, 34 MB |
+| 1 MB | 58 ms, 110 MB | 36 ms, 50 MB |
+| 10 MB | 437 ms, 747 MB | 292 ms, 286 MB |
 
 Both read every size, and the rows agree at every one of them. The peak includes
-the runtime's own footprint (about 35 MB), so the small sizes say nothing about
-memory. What the larger ones say is that this lane is about four times slower than
-Deno's and much heavier -- about 290 MB of heap per MB of input against 29 (the
-native lane costs 74) -- because the parser conses a token per character and
-reads the input three times. Peak memory fell by about a quarter on these inputs
-when the emitter stopped allocating a fresh object for a constructor with no
-fields (bend-emit `cd49ac3`, the commit `vendor/` is pinned to); that is the whole
-of what an emitter can reach here, the token per character being the program's
-own data. What that buys is the proofs: Deno's parser has
-none, and a host needs no build step of its own, Bend's ES module being the whole
-parser.
+the runtime's own footprint (about 15 MB), so the small sizes say nothing about
+memory. What the larger ones say is that this lane is about 1.5x slower than
+Deno's and about 2.6x heavier -- 75 MB of process per MB of input against 29 --
+but those two numbers are not the same kind of thing. About 19 MB per MB is what
+the parse holds: with `bun:jsc`'s heap statistics, the live heap after a forced
+collection is 193 MB at 10 MB, and the native lane needs 172 MB for the same
+corpus. The rest is churn -- one sliced string and one rope node per character --
+and an emitter can still take it out, by walking the input by index instead of
+slicing a character off the front. That is bend-emit's work, not the core's. What
+the lane buys is the proofs: Deno's parser has none, and a host needs no build step
+of its own, Bend's ES module being the whole parser.
 
 ## What a checkout carries
 
