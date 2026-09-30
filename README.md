@@ -195,7 +195,8 @@ input's own letters. The falsifier's separator set therefore includes letters.
 ## Speed, measured
 
 Two lanes, and they are not the same thing: a native binary built by Bend's C
-backend, and the JavaScript module the toolchain emits. Both are measured on the
+backend, and the JavaScript module the emitter in `vendor/bend-emit` builds. Both
+are measured on the
 same corpus -- three record shapes (quoted commas and doubled quotes; a quoted
 newline with empty fields; an empty quoted field), repeated to the target size,
 CRLF line ends, never a CRLF inside a quoted field -- on a 14-core Apple machine
