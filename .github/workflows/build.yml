@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
 
       - uses: actions/setup-node@v4
         with:
@@ -45,6 +44,9 @@ jobs:
         run: |
           diff -r "$RUNNER_TEMP/dist" dist
           git ls-files --error-unmatch dist/core.mjs dist/core.d.mts
+
+      - name: Fetch the reference parser
+        run: sh scripts/fetch-reference.sh
 
       - name: Gate
         run: sh test.sh

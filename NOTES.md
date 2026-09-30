@@ -19,8 +19,8 @@ The gate has eight steps. Each can fail.
 3. A host reaches the parser through `bridge.ts` (`check_bridge.ts`), including
    the refusals the bridge owes a host: a separator the parser would read as
    itself.
-4. The parser agrees with the reference (`oracle.ts`, Deno's `@std/csv` in
-   `reference/std`) on every small input, about 190k in all (192,447). Two
+4. The parser agrees with the reference (`oracle.ts`, Deno's `@std/csv`, fetched
+   into `reference/std` by `scripts/fetch-reference.sh`) on every small input, about 190k in all (192,447). Two
    known difference classes are reported and not hidden: blank records (11,910
    inputs; accepted only when the rows equal the reference's with `[""]` inserted
    at exactly the blank lines an independent scan finds), a CRLF inside a quoted
@@ -232,12 +232,13 @@ network access the first time. Nothing is vendored.
 | `core.bend` | nothing: it imports `Base` alone |
 | `LAWS.bend`, `PROOF.bend` | `bend-mathlib@0.7.0.0` from the Bend hub (the list and string lemmas) |
 | `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.3.0`) |
-| `oracle.ts` | `reference/std` (Deno's `@std/csv`, MIT), a plain directory |
+| `oracle.ts`, `bench_js.ts`, `native/scale.ts` | `reference/std` (Deno's `@std/csv`, MIT), fetched by `sh scripts/fetch-reference.sh`; git-ignored |
 | `falsify.ts`, `check_mutants.ts` | `bend-falsify`, a dev dependency pinned in `package.json` |
 | `native/` | nothing: `bend` builds it |
 
-`reference/std` is third-party code, copied unchanged. Its `PIN` file names the
-commit it was taken at.
+`reference/std` is third-party test code and is not committed. The script holds the
+pinned commit (`cbfd1a98`) and writes it to `reference/std/PIN`; a second run with the
+same pin does nothing.
 
 ## Publishing
 

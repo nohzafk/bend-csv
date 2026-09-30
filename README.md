@@ -254,7 +254,7 @@ both characters.
 
 ### Behavioral comparison with Deno's `@std/csv`
 
-The test suite compares this parser with the vendored Deno parser on 192,447
+The test suite compares this parser with the Deno parser on 192,447
 inputs. They agree on 180,085 of those inputs. The remaining 12,362 differ in
 two reported classes: 11,910 differ only by blank records (this parser keeps a
 blank line as a row of one empty field, the reference drops it), 332 differ only
@@ -265,8 +265,8 @@ blank lines found by an independent scan of the input; any other difference
 fails the suite.
 
 These are test results for that corpus, not a proof that the parsers agree on
-all other inputs. The reference source and its pinned revision are in
-[reference/std](reference/std).
+all other inputs. The reference is not part of this repository: `scripts/fetch-reference.sh`
+fetches Deno's `@std/csv` at one pinned commit into `reference/std`.
 
 ## Contributing
 
@@ -276,6 +276,7 @@ to install the pinned `bend-emit@0.3.0` build dependency.
 
 ```sh
 bun install --frozen-lockfile    # verification dependencies
+sh scripts/fetch-reference.sh    # Deno's @std/csv at a pinned commit, for the oracle and benchmarks
 sh scripts/build.sh              # core.bend -> dist/core.mjs + dist/core.d.mts
 sh test.sh                       # builds the same way, then runs the full gate
 ```
@@ -290,4 +291,4 @@ the checks. A successful exit alone therefore does not mean verification ran.
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The vendored reference parser is also MIT-licensed.
+MIT. See [LICENSE](LICENSE).

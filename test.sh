@@ -43,6 +43,7 @@ echo "== 3. the bridge a host uses =="
 bun check_bridge.ts || { echo "FAIL: the bridge does not do what it says"; exit 1; }
 
 echo "== 4. the oracle =="
+test -f reference/std/parse.ts || { echo "FAIL: no reference parser -- run: sh scripts/fetch-reference.sh"; exit 1; }
 bun oracle.ts || { echo "FAIL: the parser and the reference part ways outside the known class"; exit 1; }
 
 echo "== 5. the laws are falsified =="
@@ -86,7 +87,7 @@ echo "== 8. this library stands alone =="
 # Nothing reaches outside the checkout: a file below the root may import
 # upwards within the project (native/bench.bend does), but nothing may climb
 # past the root, and a root-level file may not climb at all.
-if grep -rn --include='*.bend' --exclude-dir=vendor --exclude-dir=reference --exclude-dir=node_modules "\.\./\.\./" . ; then
+if grep -rn --include='*.bend' --exclude-dir=reference --exclude-dir=node_modules "\.\./\.\./" . ; then
   echo "FAIL: a file here imports from above the project"
   exit 1
 fi
