@@ -67,6 +67,7 @@ fi
 # survive that, the falsifier is decoration.
 rm -rf /tmp/csv-abnf-mutant && mkdir -p /tmp/csv-abnf-mutant
 sed 's|sep, String.append(txt, one(c)), flds, rows)|sep, txt, flds, rows)|' core.bend > /tmp/csv-abnf-mutant/core.bend
+grep -qF "sep, String.append(txt, one(c)), flds, rows)" core.bend || { echo "FAIL: the line the control plants a bug on is not in core.bend"; exit 1; }
 test "$(grep -cF "sep, String.append(txt, one(c)), flds, rows)" /tmp/csv-abnf-mutant/core.bend)" = "0" || { echo "FAIL: the mutant was not planted"; exit 1; }
 bun ./vendor/bend-emit/src/emit.ts /tmp/csv-abnf-mutant/core.bend /tmp/csv-abnf-mutant > /dev/null 2>&1
 if CORE=/tmp/csv-abnf-mutant/core.mjs bun falsify.ts > /tmp/csv-abnf-control.log 2>&1; then
