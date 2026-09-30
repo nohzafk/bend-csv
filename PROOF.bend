@@ -21,6 +21,11 @@ def Laws.abnf_empty_input_is_no_record(sep):
 
 # ---- abnf_lone_empty_field_keeps_its_row ----
 
+def Laws.abnf_lone_empty_field_keeps_its_row(sep, hq):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\"\n", A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[""]]} : A.Ans}
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go("\"\n", A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[""]]} : A.Ans}
+  {==}
+
 # ---- abnf_cr_inside_a_field_is_content ----
 
 # ---- abnf_clean_input_is_one_field ----
