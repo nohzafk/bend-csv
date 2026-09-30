@@ -260,32 +260,33 @@ nothing for the runtime to split.
 
 ### The JavaScript lane
 
-The module `bend core.bend -o core.mjs` emits -- what `bridge.ts` calls -- against
-Deno's `@std/csv`, one process per parse, three runs each, time and peak resident
-set (`bun bench_js.ts`):
+The module in `dist/`, which the gate builds with `vendor/bend-emit` and
+`bridge.ts` calls, against Deno's `@std/csv`, one process per parse, three runs
+each, time and peak resident set (`bun bench_js.ts`):
 
 | input | this parser | Deno's `@std/csv` |
 | --- | --- | --- |
 | 1 KB | 1 ms, 19 MB | 1 ms, 15 MB |
-| 4 KB | 2 ms, 19 MB | 1 ms, 17 MB |
-| 16 KB | 2 ms, 24 MB | 2 ms, 20 MB |
-| 64 KB | 5 ms, 31 MB | 3 ms, 24 MB |
-| 256 KB | 15 ms, 43 MB | 9 ms, 34 MB |
-| 1 MB | 58 ms, 110 MB | 36 ms, 50 MB |
-| 10 MB | 437 ms, 747 MB | 292 ms, 286 MB |
+| 4 KB | 1 ms, 19 MB | 1 ms, 17 MB |
+| 16 KB | 2 ms, 22 MB | 2 ms, 20 MB |
+| 64 KB | 4 ms, 27 MB | 3 ms, 24 MB |
+| 256 KB | 10 ms, 35 MB | 9 ms, 34 MB |
+| 1 MB | 36 ms, 92 MB | 36 ms, 50 MB |
+| 10 MB | 265 ms, 400 MB | 297 ms, 286 MB |
 
 Both read every size, and the rows agree at every one of them. The peak includes
 the runtime's own footprint (about 15 MB), so the small sizes say nothing about
-memory. What the larger ones say is that this lane is about 1.5x slower than
-Deno's and about 2.6x heavier -- 75 MB of process per MB of input against 29 --
-but those two numbers are not the same kind of thing. About 19 MB per MB is what
-the parse holds: with `bun:jsc`'s heap statistics, the live heap after a forced
-collection is 193 MB at 10 MB, and the native lane needs 172 MB for the same
-corpus. The rest is churn -- one sliced string and one rope node per character --
-and an emitter can still take it out, by walking the input by index instead of
-slicing a character off the front. That is bend-emit's work, not the core's. What
-the lane buys is the proofs: Deno's parser has none, and a host needs no build step
-of its own, Bend's ES module being the whole parser.
+memory. What the larger ones say: this lane is faster than Deno's at 10 MB -- 265
+ms against 297 ms -- and about 1.4x heavier, 40 MB of process per MB of input
+against 29. About 19 MB per MB of that is what the parse holds: with `bun:jsc`'s
+heap statistics, the live heap after a forced collection is 193 MB at 10 MB, and
+the native lane needs 172 MB for the same corpus. The rest is the text of each
+field, built a character at a time, and the input itself -- what building a string
+in JavaScript costs. Earlier measurements here were several times heavier because
+the emitter sliced a character off the front of the input once per character; it
+now carries such a string as a pair of the string and an index into it, and
+materialises nothing. What the lane buys is the proofs: Deno's parser has none, and
+a host needs no build step of its own, Bend's ES module being the whole parser.
 
 ## What a checkout carries
 
