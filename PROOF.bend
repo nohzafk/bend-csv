@@ -131,3 +131,41 @@ def two_main(+sep: U32, hl: {Cmp.is_eq(U32.cmp(sep, 10)) == False{} : Bool}, hc:
 def Laws.abnf_separator_makes_two_fields(sep, hl, hc, a, b, ha, hb):
   %Equal.sym(String, String.append(String.append(a, SCon{Chr{sep}, SNil{}}), b), String.append(a, String.append(SCon{Chr{sep}, SNil{}}, b)), MS.append_assoc(a, SCon{Chr{sep}, SNil{}}, b)) : {A.parse_sep(sep, _) == A.Parsed{Con{Con{a, Con{b, Nil{}}}, Nil{}}} : A.Ans}
   two_main(sep, hl, hc, a, ha, b, hb)
+
+# ---- abnf_quoted_field_is_its_content ----
+#
+# In an escaped field (ME) every non-quote character is content, whatever its class.
+def me_step(+b1: Bool, +b2: Bool, +b3: Bool, +x: U32, t: String, +sep: U32, txt: String, flds: List<&2, String>, rows: List<&2, List<&2, String>>, h1: {Cmp.is_eq(U32.cmp(x, 10)) == b1 : Bool}, h2: {Cmp.is_eq(U32.cmp(x, 13)) == b2 : Bool}) -> {A.go(SCon{Chr{x}, t}, A.ME{}, A.cls_go(b1, b2, b3, False{}), sep, txt, flds, rows) == A.go(t, A.ME{}, A.cls_of(sep, t), sep, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows) : A.Ans}:
+  match b1 b2 b3:
+    case True{} _ _:
+      %Equal.sym(U32, x, 10, MS.u32_eq_of_is_eq(x, 10, h1)) : {A.go(SCon{Chr{x}, t}, A.ME{}, A.cls_go(True{}, b2, b3, False{}), sep, txt, flds, rows) == A.go(t, A.ME{}, A.cls_of(sep, t), sep, String.append(txt, SCon{Chr{_}, SNil{}}), flds, rows) : A.Ans}
+      {==}
+    case False{} True{} _:
+      %Equal.sym(U32, x, 13, MS.u32_eq_of_is_eq(x, 13, h2)) : {A.go(SCon{Chr{x}, t}, A.ME{}, A.cls_go(False{}, True{}, b3, False{}), sep, txt, flds, rows) == A.go(t, A.ME{}, A.cls_of(sep, t), sep, String.append(txt, SCon{Chr{_}, SNil{}}), flds, rows) : A.Ans}
+      {==}
+    case False{} False{} True{}:
+      {==}
+    case False{} False{} False{}:
+      {==}
+
+def walk_me(+sep: U32, hq: {Cmp.is_eq(U32.cmp(sep, 34)) == False{} : Bool}, +s: String, h: Laws.NoQuote(s), +txt: String, +flds: List<&2, String>, +rows: List<&2, List<&2, String>>) -> {A.go(String.append(s, SCon{Chr{34}, SNil{}}), A.ME{}, A.cls_of(sep, String.append(s, SCon{Chr{34}, SNil{}})), sep, txt, flds, rows) == A.fin(A.MQ{}, String.append(txt, s), flds, rows) : A.Ans}:
+  match s:
+    case SNil{}:
+      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go(SCon{Chr{34}, SNil{}}, A.ME{}, A.cls_go(False{}, False{}, _, True{}), sep, txt, flds, rows) == A.fin(A.MQ{}, String.append(txt, SNil{}), flds, rows) : A.Ans}
+      %Equal.sym(String, String.append(txt, SNil{}), txt, MS.append_nil(txt)) : {A.go(SCon{Chr{34}, SNil{}}, A.ME{}, A.cls_go(False{}, False{}, False{}, True{}), sep, txt, flds, rows) == A.fin(A.MQ{}, _, flds, rows) : A.Ans}
+      {==}
+    case SCon{Chr{+x}, t}:
+      (hqu, ht) = h
+      %Equal.sym(Bool, Cmp.is_eq(U32.cmp(x, 34)), False{}, hqu) : {A.go(SCon{Chr{x}, String.append(t, SCon{Chr{34}, SNil{}})}, A.ME{}, A.cls_go(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), _), sep, txt, flds, rows) == A.fin(A.MQ{}, String.append(txt, SCon{Chr{x}, t}), flds, rows) : A.Ans}
+      %MS.append_assoc(txt, SCon{Chr{x}, SNil{}}, t) : {A.go(SCon{Chr{x}, String.append(t, SCon{Chr{34}, SNil{}})}, A.ME{}, A.cls_go(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), False{}), sep, txt, flds, rows) == A.fin(A.MQ{}, _, flds, rows) : A.Ans}
+      Equal.trans(A.Ans, A.go(SCon{Chr{x}, String.append(t, SCon{Chr{34}, SNil{}})}, A.ME{}, A.cls_go(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), False{}), sep, txt, flds, rows), A.go(String.append(t, SCon{Chr{34}, SNil{}}), A.ME{}, A.cls_of(sep, String.append(t, SCon{Chr{34}, SNil{}})), sep, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows), A.fin(A.MQ{}, String.append(String.append(txt, SCon{Chr{x}, SNil{}}), t), flds, rows), me_step(Cmp.is_eq(U32.cmp(x, 10)), Cmp.is_eq(U32.cmp(x, 13)), Cmp.is_eq(U32.cmp(sep, x)), x, String.append(t, SCon{Chr{34}, SNil{}}), sep, txt, flds, rows, {==}, {==}), walk_me(sep, hq, t, ht, String.append(txt, SCon{Chr{x}, SNil{}}), flds, rows))
+
+def Laws.abnf_quoted_field_is_its_content(sep, hq, s, h):
+  %Equal.sym(Bool, Cmp.is_eq(U32.cmp(sep, 34)), False{}, hq) : {A.go(SCon{Chr{34}, String.append(s, SCon{Chr{34}, SNil{}})}, A.MS{}, A.cls_go(False{}, False{}, _, True{}), sep, "", [], []) == A.Parsed{[[s]]} : A.Ans}
+  walk_me(sep, hq, s, h, SNil{}, Nil{}, Nil{})
+
+# ---- abnf_doubled_quote_is_one_quote ----
+
+# ---- abnf_blank_line_adds_nothing ----
+
+# ---- abnf_trailing_newline_adds_nothing ----
