@@ -74,6 +74,12 @@ echo "== 6. the proofs =="
 OUT=$(bend --check-only PROOF.bend 2>&1) || { echo "$OUT"; echo "FAIL: the proofs do not check"; exit 1; }
 echo "$OUT"
 echo "$OUT" | grep -q "^ALL PROOFS CHECK" || { echo "FAIL: no ALL PROOFS CHECK verdict"; exit 1; }
+# The same file again through the BendTT kernel. --check-only alone can pass
+# while the kernel disagrees; a kernel recheck prints no "Use --verdict" hint.
+OUT=$(bend PROOF.bend --verdict 2>&1) || { echo "$OUT"; echo "FAIL: the kernel recheck rejects the proofs"; exit 1; }
+echo "$OUT"
+echo "$OUT" | grep -q "^ALL PROOFS CHECK" || { echo "FAIL: the kernel recheck gave no ALL PROOFS CHECK verdict"; exit 1; }
+echo "$OUT" | grep -q "Use --verdict" && { echo "FAIL: --verdict ran as a plain check"; exit 1; }
 
 echo "== 7. every law has a mutant that breaks its own proof =="
 if ! bun check_mutants.ts > /tmp/bend-csv-mutants.log 2>&1; then
