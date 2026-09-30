@@ -1,331 +1,262 @@
 # csv-abnf
 
-RFC 4180 CSV parsing in Bend, written in the shape of the grammar it implements,
-with a machine-checked proof for each of its laws. Nine laws, all proved; one
-entry point for Bend, one for a JavaScript or TypeScript host.
+An RFC 4180 CSV parser written in Bend. Each of its nine laws has a
+machine-checked proof. You can use it from Bend, and from a JavaScript or
+TypeScript host.
 
-The parser is one walk over the input -- the mode it is in and what it has read
-so far are passed as arguments -- so the rules of the grammar are the cases of
-that walk, and each rule is a law. It is tested against Deno's `@std/csv` (vendored in
-`reference/std`) as an oracle, but an oracle can find a bug and proves nothing;
-the proofs are what settle the laws.
+## What you get
 
-Clone with `git clone --recurse-submodules`: the proofs and the module builder
-live in submodules under `vendor/` (see "What a checkout carries").
+**Laws, not luck.** Tests tend to leave some RFC 4180 rules to chance. Here each
+of those rules is a law with a proof. For example, `abnf_doubled_quote_is_one_quote`
+is the RFC's `2DQUOTE` rule: two quotes inside a quoted field are one quote in
+the field's value. The nine laws are in `LAWS.bend`. The proofs are in
+`PROOF.bend`. `bend --check-only PROOF.bend` prints `ALL PROOFS CHECK`.
 
-`sh test.sh` is the gate: eight steps, each of which can fail.
+**Speed and size, measured.**
 
-## Using it from Bend
+- Native (a binary built by Bend's C backend): about twice as fast as Deno's
+  `@std/csv`, and lighter than it at every size measured, 0.1 MB to 40 MB.
+- JavaScript (the module Bend emits): faster than Deno's at 10 MB (265 ms against
+  297 ms), and about 1.4x heavier in memory.
 
-A Bend file imports it and calls one of two functions:
+The tables are below.
 
-```bend
-import Base
-import ./core.bend as C
+## Three kinds of evidence
 
-# C.parse(s) is the comma instance; C.parse_sep(sep, s) takes the separator's
-# code point. Both answer C.Parsed{rows} or C.Rejected{}:
-
-def fields_of(line: String) -> String:
-  match C.parse(line):
-    case C.Parsed{rows}:
-      "read"
-    case C.Rejected{}:
-      "not a file of the format"
-```
-
-The answer carries no position and no reason: this parser has neither, and that
-is deliberate (the shape below says why). A caller that needs to know *where* a
-defect is wants a parser that reports positions, such as Deno's `@std/csv`.
-
-Once published (see below), the same file comes from the hub by content hash,
-and nothing else changes:
-
-```bend
-import 0x<hash>/core.bend as C
-```
-
-## Using it from TypeScript or JavaScript
-
-A host gets the parser as an ES module, and it reads at any size; the numbers,
-and what it costs, are under "The JavaScript lane" below.
-
-Two ways, and the difference matters:
-
-```ts
-// The bridge a host uses: a byte-order mark stripped, the separator checked,
-// a refusal as an error.
-import { parse, CsvParseError } from "./bridge.ts";
-
-const rows = parse("a,b\r\n");                 // [["a", "b"]]
-const more = parse(text, { separator: ";" });  // or throw CsvParseError
-```
-
-```sh
-# Or the module on its own, built by the toolchain:
-bend core.bend -o core.mjs
-```
-
-`bridge.ts` strips a byte-order mark (the host's job) and refuses a separator the
-parser would read as itself before comparing it -- LF, CR, the quote, or more
-than one character. That check lives in the bridge and not in the core on
-purpose: the core reads those characters as themselves, so a host passing one
-would get the reading of a file whose separator never appears. Adding the check
-to the core would be a new claim, and here every claim has a law.
-
-There is no input-size ceiling on this path: the walk compiles to a loop in the
-emitted module, so a host can hand it a whole file. The largest measured is 10 MB
--- 582,543 rows, 656 ms, 690 MB of process, through `bridge.ts`. Bend's JavaScript
-lane does impose such a ceiling on other shapes: a self-call in a field that is
-not the last one becomes a JavaScript recursion, one frame per character. For the
-fastest reading of bulk input, build the parser natively
-(`bend native/bench.bend -o native/bench`).
-
-## What is proved, and how
-
-| | |
-| --- | --- |
-| the laws | nine, in `LAWS.bend`; `bend --check-only PROOF.bend` says `ALL PROOFS CHECK` |
-| the parser | `core.bend`, 174 lines; `bend --check-only core.bend` says the same |
-| the proofs | `PROOF.bend`, 577 lines, one section per law |
-
-The gate checks, in order: the core; the module the toolchain builds; the bridge
-a host uses; the parser against the reference over ~190k inputs; every law
-falsified over ~100k inputs with a controlled falsifier; every law proved; a
-mutant for every law that makes it false and breaks its own proof; and that
-nothing here imports from outside the repository.
-
-Three kinds of evidence, kept apart on purpose:
-
-- **proved**: the nine laws, by bend's checker. (`--verdict`, the BendTT kernel,
-  is not run: from Bend 2.0.34 the checker shares a graph it has proved equal and
-  the kernel has not caught up, so the two can disagree on a proof the checker
-  accepts. This is the toolchain's state, not this library's.)
-- **tested**: the oracle against Deno's `@std/csv` (192,447 inputs, one
-  difference class counted rather than hidden), the falsifier, the mutants.
-- **measured**: time and memory, below.
-
-## The grammar
-
-RFC 4180 section 2, transcribed; every line of it is commented onto the def that
-implements it.
-
-```
-file        = [header CRLF] record *(CRLF record) [CRLF]
-header      = name *(COMMA name)
-name        = field
-record      = field *(COMMA field)
-field       = (escaped / non-escaped)
-escaped     = DQUOTE *(TEXTDATA / COMMA / CR / LF / 2DQUOTE) DQUOTE
-non-escaped = *TEXTDATA
-COMMA       = %x2C          CR = %x0D        DQUOTE = %x22
-LF          = %x0A          CRLF = CR LF
-TEXTDATA    = %x20-21 / %x23-2B / %x2D-7E
-```
-
-Three refinements, each measured against the reference and each what a first
-guess gets wrong:
-
-- **a blank line is not a record.** `record` as written can be an empty field, so
-  the grammar over-generates here; the reading drops it. It falls out of the step:
-  a line end met before any field has begun closes nothing, while `""` has already
-  begun one, so it is a record holding one empty field.
-- **a CR the line does not end at is content.** CR is not TEXTDATA, but `a\rb` is
-  one field. A record ends at LF, at CRLF, or at a CR the input ends on.
-- **a trailing newline adds no record.**
-
-## The shape, and why it is this shape
-
-`bend` rejects a self-call unless, reading the arguments left to right, one
-shrinks and everything before it is passed unchanged, and it never reads a
-helper's result as a subterm. So "peel a piece with a helper, then recurse on
-what it left" cannot be written, and a pass that consumes to a variable depth is
-one walk whose self-call takes a pattern-bound tail. What that leaves:
-
-- **one walk for the whole grammar** -- a record ending, a field ending and the
-  field's own text all decided at the same character -- with the input as the first
-  parameter, the mode it is in second, and what has been read in the rest;
-- **a mode for each position in the grammar** -- the start of a field, a bare
-  field, an escaped one, just after a quote, and three more that hold a CR back
-  until the next character says whether it ended the line or was content.
-
-Nothing recurses on a computed value, and nothing matches one: the modes are
-parameters and a character's kind is a constructor.
-
-The law that makes the point is `abnf_doubled_quote_is_one_quote`: RFC 4180's
-`2DQUOTE` alternative -- two quotes in the text are one quote in the field -- is
-a rule that tests alone tend to leave to chance, and here it is a law.
-
-The state is the mode, the text of the field being read, the fields of the record
-being read, and the rows finished, with no positions anywhere. A separator closes
-a field, a line end closes a record, and the CR is held in a mode of its own.
-
-Fusing the walk is also what made the proofs smaller. The shape before this one
-had a walk per level of the grammar with a map between them, and a proof about a
-list has to reason about the list it is handed, so it needed mirrored functions
--- `tx`, `push`, `add_push`, `one_cons` -- whose only job was to undo the order a
-layer had accumulated in. With one walk there is nothing to mirror: each mode's
-induction hypothesis says what the walk does to the input that is left, and two
-mathlib facts about `String.append` close the steps. `PROOF.bend` went from 951
-lines to 577 while proving the same nine laws.
-
-## The laws
-
-Nine, in `LAWS.bend`. Each is falsified over ~100k inputs across ten separators
-before it is proved, and each has a mutant that makes it false and breaks its own
-proof.
-
-| law | what it says | hypotheses |
+| Kind | What it covers | How |
 | --- | --- | --- |
-| `abnf_empty_input_is_no_record` | the empty input holds no record | none |
-| `abnf_trailing_newline_adds_nothing` | a newline at the very end changes nothing | none |
-| `abnf_blank_line_adds_nothing` | an empty line produces no record | no quote in the input |
-| `abnf_clean_input_is_one_field` | a clean input is one record of one field, itself; empty means no record | `Clean(sep, s)` |
-| `abnf_separator_makes_two_fields` | two clean records joined by the separator are two fields | `Clean`, separator is not LF or CR |
-| `abnf_quoted_field_is_its_content` | a quoted field's content is that content | no quote in it, separator is not the quote |
-| `abnf_doubled_quote_is_one_quote` | `"a""b"` is the field `a"b` | separator is not the quote |
-| `abnf_lone_empty_field_keeps_its_row` | a quoted empty field is a field, so the row survives | separator is not the quote |
-| `abnf_cr_inside_a_field_is_content` | `a\rb\r\n` is one record `a\rb` | separator is not `a` or `b` |
+| Proved | The nine laws | Bend's checker |
+| Tested | The parser against Deno's `@std/csv` on 192,447 inputs; each law against about 100,000 generated inputs; one planted edit ("mutant") per law | `sh test.sh` |
+| Measured | Time and peak memory | `native/scale.ts`, `bench_js.ts` |
 
-The hypotheses are not decoration, and the falsifier is what put them there:
-`abnf_lone_empty_field_keeps_its_row` is false for the separator `"`, and
-`abnf_cr_inside_a_field_is_content` is false for the separator `a` or `b` -- the
-input's own letters. The falsifier's separator set therefore includes letters.
+A test can find a bug. It cannot prove that there is none. The proofs settle the
+laws. The tests and the measurements cover the rest. The proofs state what the
+parser does on the inputs each law names. They do not say that the parser
+agrees with every other CSV parser.
 
-## Speed, measured
+The proof checker used is `bend --check-only`. The stricter `bend --verdict`
+recheck is not run. From Bend 2.0.34 the two can disagree on a proof, because
+the kernel has not caught up with the checker. See `NOTES.md`.
 
-Two lanes, and they are not the same thing: a native binary built by Bend's C
-backend, and the JavaScript module the emitter in `vendor/bend-emit` builds. Both
-are measured on the
-same corpus -- three record shapes (quoted commas and doubled quotes; a quoted
-newline with empty fields; an empty quoted field), repeated to the target size,
-CRLF line ends, never a CRLF inside a quoted field -- on a 14-core Apple machine
-with 36 GB of memory. The two scripts are `native/scale.ts` and `bench_js.ts`.
+## Compared with Deno's `@std/csv`
 
-Each table comes from one run of one script, and the runs are minutes apart at
-best. Peak memory repeats closely; timing does not. The same 10 MB parse in the
-JavaScript lane has come out at 437 ms and 450 ms on consecutive runs, and a
-machine under other load moves it further. Treat the time columns as a factor,
-not a figure.
+| | csv-abnf | Deno `@std/csv` |
+| --- | --- | --- |
+| Proofs | 9 laws, machine-checked | none |
+| Native, 10 MB | 147 ms, 172 MB | 291 ms, 284 MB (run in bun) |
+| Native, 1 MB | 11 ms, 19 MB | 33 ms, 50 MB |
+| Native, 0.1 MB | 2 ms, 4 MB | 4.4 ms, 26 MB |
+| JavaScript, 10 MB | 265 ms, 400 MB | 297 ms, 286 MB |
+| Positions and reasons on error | no | yes |
+| CRLF inside a quoted field | read as content | see below |
+| Runs in a browser | a JavaScript host uses the emitted module | yes |
+| Language | Bend | TypeScript |
 
-### The native lane
+Differences you need to know:
 
-`bend native/bench.bend -o native/bench`. One run per size, timed by the
-benchmark itself, peak resident set from macOS's `time -l`. `native/scale.ts`
-rebuilds that binary when `core.bend` is newer than it, and prints when the binary
-it used was built -- a table taken from a stale binary is wrong in a way that
-looks exactly like a table taken from a good one.
+- **No positions, no reasons.** A refusal says only that the input is not a file
+  of the format. This is deliberate: the parser keeps no position, and each law
+  is stated on the rows and on whether a file was read at all. If you must tell
+  a user where a defect is, use a parser that reports positions, such as Deno's.
+- **CRLF inside a quoted field.** This parser reads a CRLF inside a quoted field
+  as content. The two parsers differ on such inputs. The oracle counts them and
+  does not hide them: 452 of the 192,447 compared inputs. On every other input
+  they agree.
+- **Bend module, not a browser library.** Deno's parser is a TypeScript module.
+  This one is a Bend module. A JavaScript host takes the module that Bend emits
+  (`dist/core.mjs`, built by `sh test.sh` with `vendor/bend-emit`). Or it builds the
+  native binary (`bend native/bench.bend -o native/bench`).
 
-| input | time | throughput | peak RSS |
-| --- | --- | --- | --- |
-| 0.5 MB | 5 ms | 100 MB/s | 11 MB |
-| 1 MB | 11 ms | 91 MB/s | 19 MB |
-| 2 MB | 24 ms | 83 MB/s | 36 MB |
-| 5 MB | 70 ms | 71 MB/s | 87 MB |
-| 10 MB | 147 ms | 68 MB/s | 172 MB |
-| 20 MB | 304 ms | 66 MB/s | 342 MB |
-| 40 MB | 623 ms | 64 MB/s | 682 MB |
+Two notes on the numbers:
 
-Time is linear in the input and memory is linear behind it, at about 17 MB of
-process per MB of input by 40 MB: the input and the result, because the walk holds
-nothing per character. Nothing runs out of stack either -- 40 million characters,
-1.7 million rows. Throughput tapers with size, from 100 MB/s on half a megabyte to
-64 MB/s on forty; that is the cache and the allocator, not the walk. On 36 GB the
-arithmetic puts the limit near two gigabytes of CSV. It is arithmetic, not a
-measurement, and the largest input measured is 40 MB.
+- Timing does not repeat between runs. The same 10 MB JavaScript parse has come
+  out at 437 ms and 450 ms on consecutive runs in an earlier measurement. Read
+  the time columns as a factor, not as a figure. Peak memory repeats closely.
+- The native comparison is a binary against a JavaScript parser. Read it as what
+  a host gets from each, not as one language being faster than another.
 
-Against the reference, on the same corpus and by the same method
-(`bun native/scale.ts <MB>` runs both):
+All numbers come from one 14-core Apple machine with 36 GB of memory. The
+corpus has three record shapes (quoted commas and doubled quotes; a quoted
+newline with empty fields; an empty quoted field), CRLF line ends, and never a
+CRLF inside a quoted field. The largest input measured is 40 MB (native) and
+10 MB (JavaScript).
 
-| input | this parser (native) | Deno's `@std/csv` (in bun) |
+### Native
+
+| input | this parser | Deno's `@std/csv` (in bun) |
 | --- | --- | --- |
 | 0.1 MB | 2 ms, 4 MB | 4.4 ms, 26 MB |
 | 1 MB | 11 ms, 19 MB | 33 ms, 50 MB |
 | 10 MB | 147 ms, 172 MB | 291 ms, 284 MB |
 
-So it is about twice as fast as the reference at every size from 0.1 MB up, and
-lighter than it at every size too: 172 MB against 284 MB at 10 MB, and 682 MB
-against 884 MB at 40 MB, which is 17 MB per MB of input against 22. The reference
-is a JavaScript parser and this is a native binary, so read the comparison as what
-a host gets from each, not as one language being faster than another.
+Native alone, up to 40 MB:
 
-Threads do not enter into it: the parse is one dependent chain, so there is
-nothing for the runtime to split.
-
-| 5 MB, threads | time | peak RSS |
+| input | time | peak memory |
 | --- | --- | --- |
-| default | 70 ms | 87 MB |
-| `--threads 10` | 71 ms | 87 MB |
+| 0.5 MB | 5 ms | 11 MB |
+| 1 MB | 11 ms | 19 MB |
+| 2 MB | 24 ms | 36 MB |
+| 5 MB | 70 ms | 87 MB |
+| 10 MB | 147 ms | 172 MB |
+| 20 MB | 304 ms | 342 MB |
+| 40 MB | 623 ms | 682 MB |
 
-`sh native/threads.sh <file>` repeats that on any file.
+Time is linear in the input size. Memory is about 17 MB per MB of input at 40 MB,
+against 22 MB per MB for Deno's parser. Nothing runs out of stack: the 40 MB
+input has 1.7 million rows.
 
-### The JavaScript lane
+### JavaScript
 
-The module in `dist/`, which the gate builds with `vendor/bend-emit` and
-`bridge.ts` calls, against Deno's `@std/csv`, one process per parse, three runs
-each, time and peak resident set (`bun bench_js.ts`):
+The emitted module against Deno's `@std/csv`. One process per parse, three runs
+each.
 
 | input | this parser | Deno's `@std/csv` |
 | --- | --- | --- |
 | 1 KB | 1 ms, 19 MB | 1 ms, 15 MB |
-| 4 KB | 1 ms, 19 MB | 1 ms, 17 MB |
 | 16 KB | 2 ms, 22 MB | 2 ms, 20 MB |
-| 64 KB | 4 ms, 27 MB | 3 ms, 24 MB |
 | 256 KB | 10 ms, 35 MB | 9 ms, 34 MB |
 | 1 MB | 36 ms, 92 MB | 36 ms, 50 MB |
 | 10 MB | 265 ms, 400 MB | 297 ms, 286 MB |
 
-Both read every size, and the rows agree at every one of them. The peak includes
-the runtime's own footprint (about 15 MB), so the small sizes say nothing about
-memory. What the larger ones say: this lane is faster than Deno's at 10 MB -- 265
-ms against 297 ms -- and about 1.4x heavier, 40 MB of process per MB of input
-against 29. About 19 MB per MB of that is what the parse holds: with `bun:jsc`'s
-heap statistics, the live heap after a forced collection is 193 MB at 10 MB, and
-the native lane needs 172 MB for the same corpus. The rest is the text of each
-field, built a character at a time, and the input itself -- what building a string
-in JavaScript costs. Earlier measurements here were several times heavier because
-the emitter sliced a character off the front of the input once per character; it
-now carries such a string as a pair of the string and an index into it, and
-materialises nothing. What the lane buys is the proofs: Deno's parser has none, and
-a host needs no build step of its own, Bend's ES module being the whole parser.
+The rows agree with Deno's at every size. The peak includes the runtime's own
+footprint (about 15 MB), so the small sizes say nothing about memory. At 10 MB
+this parser uses about 40 MB of process per MB of input. Deno's uses about 29.
 
-## What a checkout carries
+## Use it from Bend
 
-`git clone --recurse-submodules` (or `git submodule update --init` after a plain
-clone) fetches `vendor/`; `bun install` fetches the dev dependency. `test.sh`
-says so if `vendor/` is empty.
+Get the source with `git clone --recurse-submodules`. The package is **not yet on
+Bend Hub**. Until it is, import the file from your clone:
 
-| | needs |
-| --- | --- |
-| `core.bend` | nothing: it imports `Base` alone |
-| `LAWS.bend`, `PROOF.bend` | `vendor/bendlib/packages/bend-mathlib` (the list and string lemmas), a submodule |
-| `bridge.ts` | the module in `dist/`, which the gate builds with `vendor/bend-emit` (a submodule) |
-| `oracle.ts` | `reference/std` (Deno's `@std/csv`, MIT), a plain directory |
-| `falsify.ts`, `check_mutants.ts` | `bend-falsify`, a dev dependency pinned in `package.json` |
-| `native/` | nothing: `bend` builds it |
+```bend
+import Base
+import ./core.bend as C
 
-`reference/std` is third-party code, copied unchanged; its `PIN` file names the
-commit it was taken at. `BEND_VERSION` names the Bend release the gate expects;
-with another release installed, `sh test.sh` prints `SKIP` and exits 0.
+# C.parse(s) reads a comma-separated file.
+# C.parse_sep(sep, s) takes the separator as a code point (59 is ";").
+# Both answer C.Parsed{rows} or C.Rejected{}.
 
-## Publishing to Bend Hub
+def describe(r: C.Ans) -> String:
+  match r:
+    case C.Parsed{rows}:
+      "read " ++ Nat.show(List.length(&2, List<&2, String>, rows)) ++ " rows"
+    case C.Rejected{}:
+      "not a file of the format"
 
-`core.bend` imports `Base` alone, so it publishes on its own:
-
-```sh
-bend login                        # once
-bend core.bend --publish csv-abnf@0.1.0
+def main() -> IO(Unit):
+  do IO<Unit>:
+    IO.print(describe(C.parse("a,b\r\nc,d\r\n")))     # read 2 rows
+    IO.print(describe(C.parse_sep(59, "a;b\r\n")))    # read 1 rows
+    IO.print(describe(C.parse("a,\"b")))              # not a file of the format
 ```
 
-That uploads the file with everything it imports and prints the import line
-(`import 0x<hash>/core.bend as C`). Two things to know: **a publish is public and
-permanent**, and a `LICENSE` file beside the entry decides the license (without
-one a package is MIT-0, and adding one later changes the hash, so it would be a
-new version). The proofs need not ship with the claim -- a law left open in one
-file can be filled in another, which is how `LAWS.bend` and `PROOF.bend` are
-split. If they are published too they drag the vendored mathlib along: 452 KB of
-lemmas the parser does not need.
+Save this beside `core.bend` and run `bend file.bend`. Bend does not let you
+`match` on a call directly, so the answer goes through a `def` (`describe`).
+
+### After publication
+
+The publish form is a named one. The version needs **four** numbers. Bend
+rejects `@0.1.0` with "at four numbers like 1.0.0.0".
+
+```sh
+bend login                                   # once
+bend core.bend --publish csv-abnf@0.1.0.0
+```
+
+A published package is imported like this:
+
+```bend
+import csv-abnf@0.1.0.0/core.bend as C
+```
+
+Nothing has been published. A publish is public and permanent. A `LICENSE` file
+beside the entry decides the license.
+
+## Use it from TypeScript or JavaScript
+
+Use the bridge, `bridge.ts`. It calls the emitted module in `dist/`. Build
+`dist/` with `sh test.sh`, or with
+`bun ./vendor/bend-emit/src/emit.ts core.bend dist`.
+
+```ts
+import { parse, CsvParseError } from "./bridge.ts";
+
+// A comma-separated file. The byte-order mark is stripped.
+const rows = parse("\uFEFFa,b\r\nc,\"d\"\"e\"\r\n");
+// [["a", "b"], ["c", "d\"e"]]
+
+// Another separator.
+const semi = parse("a;b\n", { separator: ";" });
+// [["a", "b"]]
+
+// A refusal is an error.
+try {
+  parse("a,\"b");                      // a quote that never closes
+} catch (e) {
+  if (e instanceof CsvParseError) console.log("not a file of the format");
+  else throw e;
+}
+```
+
+What the bridge does that the bare module does not:
+
+- **It strips a byte-order mark** (U+FEFF) at the start of the text. That is the
+  host's job, not the parser's.
+- **It refuses a separator that the parser would read as itself.** These are LF, CR,
+  the quote, and any string that is not exactly one character. The bridge throws
+  a `TypeError` for them.
+
+The check is in the bridge and not in the core. The core reads LF, CR and the
+quote as themselves before it compares them with the separator. A file read with
+one of them as separator would have a separator that never appears. The
+core's laws say so in their hypotheses. Adding the check to the core would add a
+claim, and each claim in the core needs a law.
+
+`bend core.bend -o core.mjs` builds the module alone. Its answer is Bend data
+(`{ $: "Parsed", rows }`, with lists as `Con`/`Nil` cells), not arrays. Use the
+bridge if you want arrays.
+
+## API
+
+**Bend** (`core.bend`)
+
+| Function | Meaning |
+| --- | --- |
+| `parse(s)` | Parse `s` with a comma as separator |
+| `parse_sep(sep, s)` | Parse `s` with the code point `sep` as separator |
+
+Each returns `Parsed{rows}`, where `rows` is a list of records and each record is a
+list of strings, or `Rejected{}`.
+
+**TypeScript** (`bridge.ts`)
+
+| Item | Meaning |
+| --- | --- |
+| `parse(text, { separator })` | Returns `string[][]`. `separator` is one character, default `","`. |
+| `CsvParseError` | Thrown when the input is not a file of the format |
+
+**What the answer does not carry:** a position or a reason. A refusal is one bit.
+The parser is one walk that keeps no position, and the laws are stated on the rows
+and on whether a file was read. A caller that needs a position needs a different
+parser.
+
+RFC 4180 details this parser follows: a blank line is not a record; a CR that
+does not end a line is content; a trailing newline adds no record.
+
+## Requirements
+
+- Bend 2.0.34 (`BEND_VERSION`). With another release, `sh test.sh` prints `SKIP`
+  and exits 0.
+- `bun`, for the bridge, the oracle and the gate.
+- The submodules under `vendor/` (`git submodule update --init`). `core.bend`
+  itself needs only `Base`.
+- `reference/std` is Deno's `@std/csv` (MIT), copied unchanged as the oracle.
+
+`sh test.sh` is the gate. It checks the core, the emitted module, the bridge, the
+oracle, the falsifier, the proofs and the mutants.
 
 ## License
 
 MIT. See `LICENSE`.
+
+Internals (the gate, how the proofs are built, the harness traps, the commands):
+see [NOTES.md](NOTES.md).
