@@ -30,7 +30,7 @@ Import `bend-csv-parser` from Bend Hub. Save this as `example.bend`, then run
 
 ```bend
 import Base
-import bend-csv-parser@0.1.0.0/core.bend as C
+import bend-csv-parser@0.1.0.1/core.bend as C
 
 def describe(r: C.Ans) -> String:
   match r:
