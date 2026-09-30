@@ -25,12 +25,12 @@ Build and verification tools are listed in the contributing section below.
 
 ### Bend
 
-Import `bend-csv` from Bend Hub. Save this as `example.bend`, then run
+Import `bend-csv-parser` from Bend Hub. Save this as `example.bend`, then run
 `bend example.bend`:
 
 ```bend
 import Base
-import bend-csv@0.1.0.0/core.bend as C
+import bend-csv-parser@0.1.0.0/core.bend as C
 
 def describe(r: C.Ans) -> String:
   match r:

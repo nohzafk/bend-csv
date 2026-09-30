@@ -247,11 +247,12 @@ same pin does nothing.
 
 ```sh
 bend login                                   # once
-bend core.bend --publish bend-csv@0.1.0.0
+bend core.bend --publish bend-csv-parser@0.1.0.0
 ```
 
-Correction: the earlier README wrote `bend-csv@0.1.0`. Bend rejects it: the
-version needs four numbers. The command uploads the file with everything it
+Bend names the package by what follows `--publish`. The name needs at least 12
+characters (shorter names are won at auction), and the version needs four numbers,
+so `bend-csv-parser@0.1.0.0`. The command uploads the file with everything it
 imports, and it prints the import line. A publish is public and permanent. A
 `LICENSE` file beside the entry decides the license. Without one, a package is
 MIT-0, and adding one later changes the hash, so it would be a new version. The
