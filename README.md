@@ -19,7 +19,7 @@ CSV produces an error without a location or detailed explanation.
 
 ## Getting started
 
-Bend callers need Bend 2.0.34. TypeScript callers use `bridge.ts` and the
+Bend callers need Bend 2.0.35. TypeScript callers use `bridge.ts` and the
 included prebuilt module; they do not need Bend or the emitter.
 Build and verification tools are listed in the contributing section below.
 
@@ -214,7 +214,7 @@ and hypotheses.
 
 Tests can expose bugs; they do not extend the scope of a proof.
 
-The current twelve proofs pass both Bend 2.0.34's `--check-only` and the
+The current twelve proofs pass both Bend 2.0.35's `--check-only` and the
 BendTT kernel recheck (`bend --verdict PROOF.bend`). The automated suite runs
 the kernel recheck wherever the kernel builds (not in CI). See the [toolchain notes](NOTES.md#the---verdict-caveat).
 
@@ -270,8 +270,8 @@ fetches Deno's `@std/csv` at one pinned commit into `reference/std`.
 ## Contributing
 
 Building and verification need Bend exactly as in
-`BEND_VERSION` (2.0.34), plus `bun` and `npx` on `PATH`. Run `bun install` first
-to install the pinned `bend-emit@0.3.0` build dependency.
+`BEND_VERSION` (2.0.35), plus `bun` and `npx` on `PATH`. Run `bun install` first
+to install the pinned `bend-emit@0.3.1` build dependency.
 
 ```sh
 bun install --frozen-lockfile    # verification dependencies
@@ -284,7 +284,7 @@ sh test.sh                       # builds the same way, then runs the full gate
 both use it. Commit the regenerated `dist/` with the change to `core.bend`; CI
 fails when the committed `dist/` differs from a fresh build.
 
-The suite requires the Bend version in `BEND_VERSION` (currently 2.0.34).
+The suite requires the Bend version in `BEND_VERSION` (currently 2.0.35).
 With another version, it prints `SKIP` and exits successfully without running
 the checks. A successful exit alone therefore does not mean verification ran.
 

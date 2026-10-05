@@ -11,7 +11,7 @@ The gate has eight steps. Each can fail.
 1. The core checks (`bend --check-only core.bend` prints `ALL PROOFS CHECK`), and no
    proof of it rests on unsafe code.
 2. The core builds into a typed module in `dist/` with `scripts/build.sh`,
-   which runs the local `bend-emit@0.3.0` dev dependency.
+   which runs the local `bend-emit@0.3.1` dev dependency.
    `bend-emit` exits 0 even when Bend cannot compile the file, so the
    script reads its log as well as the exit code, and deletes the old module
    first. Otherwise the oracle would measure a stale module. `dist/` is
@@ -40,7 +40,7 @@ The gate has eight steps. Each can fail.
 ### The `--verdict` caveat
 
 `bend --verdict PROOF.bend` rechecks the proofs with the BendTT kernel.
-The current twelve proofs pass this check on Bend 2.0.34. The automated gate
+The current twelve proofs pass this check on Bend 2.0.35. The automated gate
 runs `--check-only` everywhere and `--verdict` wherever the kernel can be built
 (step 6; it needs Lean, which CI does not install, so CI prints `SKIP` for that line). Older proofs in
 this toolchain had checker/kernel disagreements; that is not the result for
@@ -174,7 +174,7 @@ input's own letters. The falsifier's separator set therefore includes letters.
 ## Measurement method
 
 Two lanes: a native binary built by Bend's C backend, and the JavaScript module
-that `scripts/build.sh` builds (emitter `bend-emit@0.3.0`). Both are measured on the same
+that `scripts/build.sh` builds (emitter `bend-emit@0.3.1`). Both are measured on the same
 corpus, on a 14-core Apple machine with 36 GB of memory. The scripts are
 `native/scale.ts` and `bench_js.ts`.
 
@@ -232,7 +232,7 @@ network access the first time. Nothing is vendored.
 | --- | --- |
 | `core.bend` | nothing: it imports `Base` alone |
 | `LAWS.bend`, `PROOF.bend` | `bend-mathlib@0.7.0.0` from the Bend hub (the list and string lemmas) |
-| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.3.0`) |
+| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.3.1`) |
 | `oracle.ts`, `bench_js.ts`, `native/scale.ts` | `reference/std` (Deno's `@std/csv`, MIT), fetched by `sh scripts/fetch-reference.sh`; git-ignored |
 | `falsify.ts`, `check_mutants.ts` | `bend-falsify`, a dev dependency pinned in `package.json` |
 | `native/` | nothing: `bend` builds it |

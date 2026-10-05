@@ -45,4 +45,7 @@ if grep -qF "$TMP" "$TMP/$NAME.mjs" "$TMP/$NAME.d.mts"; then die "temp path leak
 
 mkdir -p "$OUT"
 cp "$TMP/$NAME.mjs" "$TMP/$NAME.d.mts" "$OUT/"
-echo "build: wrote $OUT/$NAME.mjs and $OUT/$NAME.d.mts (bend $WANT, bend-emit 0.3.0)"
+# Read the emitter's own version rather than repeating it here, so a bump
+# cannot leave this line naming an emitter that is not the one installed.
+EMITTER=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/node_modules/bend-emit/package.json" 2>/dev/null | head -1)
+echo "build: wrote $OUT/$NAME.mjs and $OUT/$NAME.d.mts (bend $WANT, bend-emit ${EMITTER:-unknown})"

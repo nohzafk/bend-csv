@@ -2,7 +2,7 @@
   "name": "bend-csv",
   "type": "module",
   "devDependencies": {
-    "bend-emit": "0.3.0",
+    "bend-emit": "0.3.1",
     "bend-falsify": "github:nohzafk/bend-falsify#a50873f"
   }
 }
