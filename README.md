@@ -19,7 +19,7 @@ CSV produces an error without a location or detailed explanation.
 
 ## Getting started
 
-Bend callers need Bend 2.0.35. TypeScript callers use `bridge.ts` and the
+Bend callers need Bend 2.0.40. TypeScript callers use `bridge.ts` and the
 included prebuilt module; they do not need Bend or the emitter.
 Build and verification tools are listed in the contributing section below.
 
@@ -91,29 +91,30 @@ arrays. The TypeScript bridge is the convenient interface for array results.
 
 The native build beats Deno's established `@std/csv` parser on both time and
 peak memory at every measured size. At 10 MB it is **about 2x as fast and uses
-39% less peak memory**. The generated JavaScript build is close in speed:
-36 ms versus 36 ms at 1 MB, and 265 ms versus 297 ms at 10 MB.
+43% less peak memory**. The generated JavaScript build is close in speed:
+44 ms versus 37 ms at 1 MB, and 281 ms versus 313 ms at 10 MB.
 
 The JavaScript build does not match the reference's memory use. At 10 MB it
-uses 400 MB versus 286 MB (about 1.4x); at 1 MB it uses 92 MB versus 50 MB.
+uses 406 MB versus 300 MB (about 1.4x); at 1 MB it uses 103 MB versus 49 MB.
 
-These are results from one 14-core Apple machine with 36 GB of memory.
+These are results from one 14-core Apple machine with 36 GB of memory, with
+Bend 2.0.40 and bend-emit 0.4.4.
 The reference is the Deno standard-library parser **running in Bun**, not a
 measurement of the Deno runtime.
 
 | Build and input | bend-csv: time / peak RSS | Reference: time / peak RSS |
 | --- | --- | --- |
-| Native, 0.1 MB | 2 ms / 4 MB | 4.4 ms / 26 MB |
-| Native, 1 MB | 11 ms / 19 MB | 33 ms / 50 MB |
-| Native, 10 MB | 147 ms / 172 MB | 291 ms / 284 MB |
-| JavaScript, 1 MB | 36 ms / 92 MB | 36 ms / 50 MB |
-| JavaScript, 10 MB | 265 ms / 400 MB | 297 ms / 286 MB |
+| Native, 0.1 MB | 1 ms / 4 MB | 5.0 ms / 26 MB |
+| Native, 1 MB | 13 ms / 19 MB | 37 ms / 49 MB |
+| Native, 10 MB | 160 ms / 172 MB | 319 ms / 300 MB |
+| JavaScript, 1 MB | 44 ms / 103 MB | 37 ms / 49 MB |
+| JavaScript, 10 MB | 281 ms / 406 MB | 313 ms / 300 MB |
 
 These comparisons apply to this corpus and benchmark setup, not to arbitrary
 CSV files or host applications. They measure the native and generated cores,
 not the end-to-end TypeScript bridge.
 
-The largest native input measured is 40 MB: 623 ms and 682 MB peak RSS for
+The largest native input measured is 40 MB: 642 ms and 682 MB peak RSS for
 about 1.7 million rows. The largest JavaScript input measured is 10 MB.
 Both builds complete those inputs without a stack overflow.
 
@@ -214,7 +215,7 @@ and hypotheses.
 
 Tests can expose bugs; they do not extend the scope of a proof.
 
-The current twelve proofs pass both Bend 2.0.35's `--check-only` and the
+The current twelve proofs pass both Bend 2.0.40's `--check-only` and the
 BendTT kernel recheck (`bend --verdict PROOF.bend`). The automated suite runs
 the kernel recheck wherever the kernel builds (not in CI). See the [toolchain notes](NOTES.md#the---verdict-caveat).
 
@@ -270,8 +271,8 @@ fetches Deno's `@std/csv` at one pinned commit into `reference/std`.
 ## Contributing
 
 Building and verification need Bend exactly as in
-`BEND_VERSION` (2.0.35), plus `bun` and `npx` on `PATH`. Run `bun install` first
-to install the pinned `bend-emit@0.3.1` build dependency.
+`BEND_VERSION` (2.0.40), plus `bun` and `npx` on `PATH`. Run `bun install` first
+to install the pinned `bend-emit@0.4.4` build dependency.
 
 ```sh
 bun install --frozen-lockfile    # verification dependencies
@@ -284,7 +285,7 @@ sh test.sh                       # builds the same way, then runs the full gate
 both use it. Commit the regenerated `dist/` with the change to `core.bend`; CI
 fails when the committed `dist/` differs from a fresh build.
 
-The suite requires the Bend version in `BEND_VERSION` (currently 2.0.35).
+The suite requires the Bend version in `BEND_VERSION` (currently 2.0.40).
 With another version, it prints `SKIP` and exits successfully without running
 the checks. A successful exit alone therefore does not mean verification ran.
 
