@@ -128,6 +128,18 @@ function char_len(s, at = 0) {
   return s[at] === "\uDC00" ? 4 : s.codePointAt(at) > 0xFFFF ? 2 : 1;
 }
 
+function be$head(be$s, be$i) {
+  // bend-emit: the Char at index be$i of be$s; a unit that is not a surrogate is one.
+  const be$c = be$s.charCodeAt(be$i);
+  return be$c < 0xD800 || be$c >= 0xE000 ? be$s[be$i] : be$s.slice(be$i, be$i + char_len(be$s, be$i));
+}
+
+function be$next(be$s, be$i) {
+  // bend-emit: the index after the Char at index be$i of be$s.
+  const be$c = be$s.charCodeAt(be$i);
+  return be$c < 0xD800 || be$c >= 0xE000 ? be$i + 1 : be$i + char_len(be$s, be$i);
+}
+
 function char_code(s) {
   return s.length < 4 ? s.codePointAt(0)
     : (s.charCodeAt(1) << 22 | s.charCodeAt(2) << 11 | s.charCodeAt(3)) >>> 0;
@@ -288,7 +300,7 @@ function $cls_of(_sep_0, _s_0, be$i_s_0 = 0) {
   if (be$i_s_0 >= _s_0.length) {
     return be$N$CText;
   } else {
-    const _c_0 = _s_0.slice(be$i_s_0, be$i_s_0 + char_len(_s_0, be$i_s_0));
+    const _c_0 = be$head(_s_0, be$i_s_0);
     return $cls(_sep_0, _c_0);
   }
 }
@@ -307,8 +319,8 @@ function $go($0, $1, $2, $3, $4, $5, $6, be$i$0 = 0) {
       if (be$i_s_0 >= _s_0.length) {
         return $fin(_m_0, _txt_0, _flds_0, _rows_0);
       } else {
-        const _c_0 = _s_0.slice(be$i_s_0, be$i_s_0 + char_len(_s_0, be$i_s_0));
-        const be$i_t_0 = be$i_s_0 + char_len(_s_0, be$i_s_0);
+        const _c_0 = be$head(_s_0, be$i_s_0);
+        const be$i_t_0 = be$next(_s_0, be$i_s_0);
         if (_m_0.$ === "MS") {
           if (_k_0.$ === "CLf") {
             be$i$0 = be$i_t_0;

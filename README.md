@@ -5,8 +5,8 @@ and machine-checked proofs for twelve properties of its core.
 
 **Fast without giving up proofs.** In our 10 MB benchmark, the native build is
 about **2x as fast as Deno's `@std/csv` parser and uses 39% less peak memory**.
-The generated JavaScript build is close in speed: 265 ms versus 297 ms, though
-it uses more memory. The reference runs in Bun for these comparisons.
+The generated JavaScript build is faster too, 216 ms versus 314 ms, though it
+uses more memory. The reference runs in Bun for these comparisons.
 See [Performance](#performance) for the results and measurement scope.
 
 Use the core from Bend, or use the TypeScript bridge to get `string[][]` rows.
@@ -91,14 +91,14 @@ arrays. The TypeScript bridge is the convenient interface for array results.
 
 The native build beats Deno's established `@std/csv` parser on both time and
 peak memory at every measured size. At 10 MB it is **about 2x as fast and uses
-43% less peak memory**. The generated JavaScript build is close in speed:
-44 ms versus 37 ms at 1 MB, and 281 ms versus 313 ms at 10 MB.
+43% less peak memory**. The generated JavaScript build ties it at 1 MB
+(37 ms each) and is faster at 10 MB: 216 ms versus 314 ms.
 
 The JavaScript build does not match the reference's memory use. At 10 MB it
-uses 406 MB versus 300 MB (about 1.4x); at 1 MB it uses 103 MB versus 49 MB.
+uses 400 MB versus 300 MB (about 1.3x); at 1 MB it uses 100 MB versus 49 MB.
 
 These are results from one 14-core Apple machine with 36 GB of memory, with
-Bend 2.0.40 and bend-emit 0.4.4.
+Bend 2.0.40 and bend-emit 0.4.5.
 The reference is the Deno standard-library parser **running in Bun**, not a
 measurement of the Deno runtime.
 
@@ -107,8 +107,8 @@ measurement of the Deno runtime.
 | Native, 0.1 MB | 1 ms / 4 MB | 5.0 ms / 26 MB |
 | Native, 1 MB | 13 ms / 19 MB | 37 ms / 49 MB |
 | Native, 10 MB | 160 ms / 172 MB | 319 ms / 300 MB |
-| JavaScript, 1 MB | 44 ms / 103 MB | 37 ms / 49 MB |
-| JavaScript, 10 MB | 281 ms / 406 MB | 313 ms / 300 MB |
+| JavaScript, 1 MB | 37 ms / 100 MB | 37 ms / 49 MB |
+| JavaScript, 10 MB | 216 ms / 400 MB | 314 ms / 300 MB |
 
 These comparisons apply to this corpus and benchmark setup, not to arbitrary
 CSV files or host applications. They measure the native and generated cores,
@@ -272,7 +272,7 @@ fetches Deno's `@std/csv` at one pinned commit into `reference/std`.
 
 Building and verification need Bend exactly as in
 `BEND_VERSION` (2.0.40), plus `bun` and `npx` on `PATH`. Run `bun install` first
-to install the pinned `bend-emit@0.4.4` build dependency.
+to install the pinned `bend-emit@0.4.5` build dependency.
 
 ```sh
 bun install --frozen-lockfile    # verification dependencies

@@ -11,7 +11,7 @@ The gate has eight steps. Each can fail.
 1. The core checks (`bend --check-only core.bend` prints `ALL PROOFS CHECK`), and no
    proof of it rests on unsafe code.
 2. The core builds into a typed module in `dist/` with `scripts/build.sh`,
-   which runs the local `bend-emit@0.4.4` dev dependency.
+   which runs the local `bend-emit@0.4.5` dev dependency.
    `bend-emit` exits 0 even when Bend cannot compile the file, so the
    script reads its log as well as the exit code, and deletes the old module
    first. Otherwise the oracle would measure a stale module. `dist/` is
@@ -184,7 +184,7 @@ corpus, on a 14-core Apple machine with 36 GB of memory. The scripts are
 - JavaScript: `bun bench_js.ts`. One process per parse, three runs each.
 
 Each table comes from one run of one script. Peak memory repeats closely. Timing
-does not. The README's table was measured with Bend 2.0.40 and bend-emit 0.4.4;
+does not. The README's table was measured with Bend 2.0.40 and bend-emit 0.4.5;
 the figures below were measured with Bend 2.0.35 and bend-emit 0.3.1, and have
 not been repeated since.
 
@@ -221,7 +221,7 @@ Bend's JavaScript lane does impose a size ceiling on other shapes: a self-call i
 a field that is not the last one becomes a JavaScript recursion, one frame per
 character. The walk in this parser compiles to a loop, so it has no such ceiling.
 Correction: the earlier README quoted a 10 MB run of 582,543 rows, 656 ms, 690 MB
-through `bridge.ts`. Those figures are older than the table in the README (265 ms,
+through `bridge.ts`. Those figures are older than the table in the README (216 ms,
 400 MB at 10 MB) and are not repeated there.
 
 ## What a checkout carries
@@ -234,7 +234,7 @@ network access the first time. Nothing is vendored.
 | --- | --- |
 | `core.bend` | nothing: it imports `Base` alone |
 | `LAWS.bend`, `PROOF.bend` | `bend-mathlib@0.7.4.0` from the Bend hub (the list and string lemmas) |
-| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.4.4`) |
+| `bridge.ts` | the committed module in `dist/`, built by `scripts/build.sh` (local `bend-emit@0.4.5`) |
 | `oracle.ts`, `bench_js.ts`, `native/scale.ts` | `reference/std` (Deno's `@std/csv`, MIT), fetched by `sh scripts/fetch-reference.sh`; git-ignored |
 | `falsify.ts`, `check_mutants.ts` | `bend-falsify`, a dev dependency pinned in `package.json` |
 | `native/` | nothing: `bend` builds it |
